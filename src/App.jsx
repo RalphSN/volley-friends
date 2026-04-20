@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Users,
   UserPlus,
@@ -20,6 +20,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  CheckCircle2,
 } from "lucide-react";
 
 // 引入 Firebase 模組
@@ -28,6 +29,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
 // ====== Firebase 初始化設定 ======
+// 💡 請把這裡的引號內容替換成你在 Firebase 拿到的設定檔！
 const firebaseConfig = {
   apiKey: "AIzaSyAOr2Lvm0XcHqD4Huct8HW08LltduIBALM",
   authDomain: "volley-friends-db.firebaseapp.com",
@@ -50,11 +52,24 @@ const INITIAL_CUSTOM_FIELDS = [
   { id: "skill", name: "程度", type: "rating" },
   { id: "comp", name: "勝負欲", type: "rating" },
   { id: "friendliness", name: "友善度", type: "rating" },
+  { id: "available", name: "好揪度", type: "rating" },
   {
     id: "orientation",
     name: "性傾向",
     type: "choice",
     options: ["同性戀", "異性戀", "雙性戀", "第三性", "不確定"],
+  },
+  {
+    id: "gender",
+    name: "生理性別",
+    type: "choice",
+    options: ["男性", "女性", "跨性別"],
+  },
+  {
+    id: "goodAt",
+    name: "擅長網高",
+    type: "choice",
+    options: ["男網", "女網"],
   },
   { id: "note", name: "備註", type: "text" },
 ];
@@ -65,7 +80,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // 自動產生或讀取一個 6 碼的 Sync ID (跨裝置房間號碼)
+  // 自動產生或讀取一個 6 碼的 Room ID (跨裝置房間號碼)
   const [syncId, setSyncId] = useState(() => {
     return (
       localStorage.getItem("volleyball_sync_id") ||
@@ -75,11 +90,10 @@ export default function App() {
   const [inputSyncId, setInputSyncId] = useState("");
 
   const [activeTab, setActiveTab] = useState("list");
-  // 已經清除寫死的假資料，預設為空陣列
   const [friends, setFriends] = useState([]);
   const [customFields, setCustomFields] = useState([]);
 
-  // 1. Firebase 匿名登入 (乾淨的正式版寫法)
+  // 1. Firebase 匿名登入
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -100,7 +114,7 @@ export default function App() {
 
     localStorage.setItem("volleyball_sync_id", syncId);
 
-    // 指向資料庫中的專屬 Sync ID 文件 (標準路徑)
+    // 指向資料庫中的專屬 Sync ID 文件
     const docRef = doc(db, "rosters", syncId);
 
     setIsSyncing(true);
@@ -112,7 +126,7 @@ export default function App() {
           setFriends(data.friends || []);
           setCustomFields(data.customFields || []);
         } else {
-          // 如果是全新的房間，塞入空的球友名單與預設欄位模板
+          // 全新房間塞入預設模板
           setFriends([]);
           setCustomFields(INITIAL_CUSTOM_FIELDS);
           setDoc(docRef, { friends: [], customFields: INITIAL_CUSTOM_FIELDS });
@@ -139,7 +153,7 @@ export default function App() {
     }
   };
 
-  // 切換 Sync ID
+  // 切換 Room ID
   const handleSwitchSyncId = () => {
     if (inputSyncId.trim().length === 6) {
       setSyncId(inputSyncId.trim().toUpperCase());
@@ -175,7 +189,7 @@ export default function App() {
   const [isDraggingNav, setIsDraggingNav] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // ====== 互動處理邏輯 (加上雲端寫入) ======
+  // ====== 互動處理邏輯 ======
   const handleSaveFriend = async (e) => {
     e.preventDefault();
     if (!formData.name.trim() || formData.positions.length === 0) return;
@@ -190,14 +204,14 @@ export default function App() {
     }
     setFriends(newFriends);
     setActiveTab("list");
-    await updateCloudData(newFriends, customFields); // 寫入雲端
+    await updateCloudData(newFriends, customFields);
   };
 
   const handleDeleteFriend = async (id) => {
     const newFriends = friends.filter((f) => f.id !== id);
     setFriends(newFriends);
     setConfirmDeleteId(null);
-    await updateCloudData(newFriends, customFields); // 寫入雲端
+    await updateCloudData(newFriends, customFields);
   };
 
   const handleAddField = async (e) => {
@@ -220,7 +234,7 @@ export default function App() {
     setCustomFields(newFields);
     setNewFieldName("");
     setNewFieldOptions("");
-    await updateCloudData(friends, newFields); // 寫入雲端
+    await updateCloudData(friends, newFields);
   };
 
   const handleDeleteField = async (fieldId) => {
@@ -232,7 +246,7 @@ export default function App() {
     });
     setCustomFields(newFields);
     setFriends(newFriends);
-    await updateCloudData(newFriends, newFields); // 寫入雲端
+    await updateCloudData(newFriends, newFields);
   };
 
   // 排序與導覽列邏輯
@@ -256,7 +270,7 @@ export default function App() {
     setCustomFields(newFields);
     setDraggedIdx(null);
     setDragOverIdx(null);
-    await updateCloudData(friends, newFields); // 寫入雲端
+    await updateCloudData(friends, newFields);
   };
   const handleDragEnd = () => {
     setDraggedIdx(null);
@@ -277,7 +291,7 @@ export default function App() {
       ];
     }
     setCustomFields(newFields);
-    await updateCloudData(friends, newFields); // 寫入雲端
+    await updateCloudData(friends, newFields);
   };
 
   const handleNavMouseDown = (e) => {
@@ -320,11 +334,18 @@ export default function App() {
   };
 
   const openEditForm = (friend) => {
+    // 確保即使該球友原本沒填的新欄位，在編輯時也會給予預設值，避免錯誤
+    const initialAttributes = { ...friend.attributes };
+    customFields.forEach((f) => {
+      if (initialAttributes[f.id] === undefined) {
+        initialAttributes[f.id] = f.type === "rating" ? 3 : "";
+      }
+    });
     setFormData({
       id: friend.id,
       name: friend.name,
       positions: [...friend.positions],
-      attributes: { ...friend.attributes },
+      attributes: initialAttributes,
     });
     setActiveTab("form");
   };
@@ -360,12 +381,12 @@ export default function App() {
 
   // ====== UI 元件 ======
   const RatingInput = ({ label, value, onChange }) => (
-    <div className="mb-5">
+    <div className="mb-5 animate-slide-up">
       <div className="flex justify-between items-center mb-3">
         <label className="font-semibold text-slate-700 flex items-center gap-2">
           <Star size={16} className="text-emerald-500" /> {label}
         </label>
-        <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+        <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full shadow-sm">
           Lv. {value || 3}
         </span>
       </div>
@@ -375,9 +396,9 @@ export default function App() {
             key={num}
             type="button"
             onClick={() => onChange(num)}
-            className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 ${
+            className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform active:scale-90 cursor-pointer ${
               (value || 3) === num
-                ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.3)] border border-emerald-500"
+                ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.3)] border border-emerald-500 -translate-y-0.5"
                 : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300"
             }`}
           >
@@ -389,17 +410,17 @@ export default function App() {
   );
 
   const FriendCard = ({ friend, posKey }) => (
-    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 group">
+    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 group cursor-default">
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="font-bold text-xl text-slate-800 tracking-tight">
+          <h3 className="font-bold text-xl text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors">
             {friend.name}
           </h3>
           <div className="flex gap-1.5 flex-wrap mt-2">
             {friend.positions.map((p) => (
               <span
                 key={p}
-                className={`text-xs px-2.5 py-1 rounded-md font-bold transition-colors ${p === posKey ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}
+                className={`text-xs px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm ${p === posKey ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"}`}
               >
                 {p}
               </span>
@@ -411,28 +432,28 @@ export default function App() {
             <div className="flex items-center gap-2 bg-red-50/80 p-1.5 rounded-xl border border-red-100 animate-fade-in">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="text-slate-600 text-xs px-3 py-1.5 bg-white rounded-lg border border-slate-200 font-medium hover:bg-slate-50"
+                className="cursor-pointer text-slate-600 text-xs px-3 py-1.5 bg-white rounded-lg border border-slate-200 font-medium hover:bg-slate-50 active:scale-95 transition-transform"
               >
                 取消
               </button>
               <button
                 onClick={() => handleDeleteFriend(friend.id)}
-                className="text-white text-xs px-3 py-1.5 bg-red-500 rounded-lg font-bold shadow-sm shadow-red-500/20 hover:bg-red-600"
+                className="cursor-pointer text-white text-xs px-3 py-1.5 bg-red-500 rounded-lg font-bold shadow-sm shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-transform"
               >
                 刪除
               </button>
             </div>
           ) : (
-            <div className="opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <div className="opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1 translate-x-2 md:translate-x-0">
               <button
                 onClick={() => openEditForm(friend)}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                className="cursor-pointer p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-all hover:rotate-12 active:scale-90"
               >
                 <Edit2 size={18} />
               </button>
               <button
                 onClick={() => setConfirmDeleteId(friend.id)}
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                className="cursor-pointer p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all hover:-rotate-12 active:scale-90"
               >
                 <Trash2 size={18} />
               </button>
@@ -440,20 +461,32 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* 動態渲染卡片欄位 (保證跟隨拖曳順序，且未填寫時會顯示 Placeholder) */}
       <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-50">
         {customFields.map((field) => {
-          const val = friend.attributes[field.id];
-          if (val === undefined || val === "") return null;
+          const rawVal = friend.attributes[field.id];
+          const isEmpty = rawVal === undefined || rawVal === "";
+          const displayVal = isEmpty ? "-" : rawVal;
+
           if (field.type === "rating") {
             return (
               <div
                 key={field.id}
-                className="bg-slate-50/80 p-2.5 rounded-2xl flex justify-between items-center text-sm border border-slate-100"
+                className={`bg-slate-50/80 p-2.5 rounded-2xl flex justify-between items-center text-sm border border-slate-100 transition-colors hover:bg-slate-100 ${isEmpty ? "opacity-60" : ""}`}
               >
-                <span className="text-slate-500 flex items-center gap-1 font-medium">
-                  <Star size={14} className="text-amber-400" /> {field.name}
+                <span className="text-slate-500 flex items-center gap-1.5 font-medium">
+                  <Star
+                    size={14}
+                    className={isEmpty ? "text-slate-300" : "text-amber-400"}
+                  />{" "}
+                  {field.name}
                 </span>
-                <span className="font-bold text-slate-700">Lv.{val}</span>
+                <span
+                  className={`font-bold ${isEmpty ? "text-slate-400" : "text-slate-700"}`}
+                >
+                  {isEmpty ? "未評分" : `Lv.${displayVal}`}
+                </span>
               </div>
             );
           }
@@ -461,11 +494,13 @@ export default function App() {
             return (
               <div
                 key={field.id}
-                className="col-span-2 bg-slate-50/80 p-3 rounded-2xl text-sm border border-slate-100 flex justify-between items-center"
+                className={`col-span-2 bg-slate-50/80 p-3 rounded-2xl text-sm border border-slate-100 flex justify-between items-center transition-colors hover:bg-slate-100 ${isEmpty ? "opacity-60" : ""}`}
               >
                 <span className="text-slate-500 font-medium">{field.name}</span>
-                <span className="font-bold text-emerald-700 bg-emerald-100/50 px-3 py-1 rounded-lg text-xs">
-                  {val}
+                <span
+                  className={`font-bold px-3 py-1 rounded-lg text-xs shadow-sm transition-colors ${isEmpty ? "bg-slate-200/50 text-slate-400" : "text-emerald-700 bg-emerald-100/60"}`}
+                >
+                  {isEmpty ? "未填寫" : displayVal}
                 </span>
               </div>
             );
@@ -473,12 +508,16 @@ export default function App() {
           return (
             <div
               key={field.id}
-              className="col-span-2 bg-slate-50/80 p-3 rounded-2xl text-sm border border-slate-100"
+              className={`col-span-2 bg-slate-50/80 p-3 rounded-2xl text-sm border border-slate-100 transition-colors hover:bg-slate-100 ${isEmpty ? "opacity-60" : ""}`}
             >
               <span className="text-slate-400 text-xs block mb-1 font-medium">
                 {field.name}
               </span>
-              <span className="text-slate-700 font-medium">{val}</span>
+              <span
+                className={`font-medium ${isEmpty ? "text-slate-300" : "text-slate-700"}`}
+              >
+                {isEmpty ? "未填寫" : displayVal}
+              </span>
             </div>
           );
         })}
@@ -489,12 +528,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans selection:bg-emerald-100 text-slate-800">
       {/* 玻璃擬物化 Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/50 pt-safe">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/50 pt-safe transition-all">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-500">
-            <span className="text-emerald-500">🏐</span> 排球圖鑑
+          <h1
+            className="text-2xl font-extrabold flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-500 hover:scale-[1.02] transition-transform cursor-pointer"
+            onClick={() => {
+              setActiveTab("list");
+              window.scrollTo(0, 0);
+            }}
+          >
+            <span className="text-emerald-500 transform hover:rotate-12 transition-transform duration-300">
+              🏐
+            </span>{" "}
+            排球圖鑑
           </h1>
-          <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+          <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 shadow-sm cursor-default">
             {user ? (
               isSyncing ? (
                 <RefreshCw
@@ -518,7 +566,7 @@ export default function App() {
           <div className="animate-fade-in">
             {/* 搜尋與篩選 */}
             <div className="flex gap-3 mb-8">
-              <div className="relative flex-1 group">
+              <div className="relative flex-1 group cursor-text">
                 <Search
                   className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors"
                   size={20}
@@ -528,20 +576,23 @@ export default function App() {
                   placeholder="搜尋姓名..."
                   value={filterName}
                   onChange={(e) => setFilterName(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-700 shadow-sm"
+                  className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-700 shadow-sm hover:border-emerald-300"
                 />
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`px-5 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm border ${showFilters || filterPositions.length > 0 || Object.keys(filterRatings).length > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"}`}
+                className={`cursor-pointer px-5 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm border active:scale-95 ${showFilters || filterPositions.length > 0 || Object.keys(filterRatings).length > 0 ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300"}`}
               >
-                <Filter size={20} />
+                <Filter
+                  size={20}
+                  className={showFilters ? "fill-emerald-100" : ""}
+                />
               </button>
             </div>
 
             {/* 展開的篩選器 */}
             {showFilters && (
-              <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 mb-8 animate-fade-in">
+              <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 mb-8 animate-slide-up origin-top">
                 <div className="mb-6">
                   <label className="block font-bold text-slate-700 mb-3 text-sm tracking-wide">
                     包含位置
@@ -557,7 +608,7 @@ export default function App() {
                             setFilterPositions,
                           )
                         }
-                        className={`px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${filterPositions.includes(pos) ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+                        className={`cursor-pointer px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border active:scale-90 ${filterPositions.includes(pos) ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300"}`}
                       >
                         {pos}
                       </button>
@@ -570,11 +621,11 @@ export default function App() {
                     .map((field) => (
                       <div
                         key={`filter-${field.id}`}
-                        className="bg-slate-50 p-4 rounded-2xl border border-slate-100"
+                        className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-emerald-200 transition-colors"
                       >
                         <label className="flex justify-between text-slate-600 mb-2 font-medium text-sm">
                           <span>最低 {field.name}</span>
-                          <span className="text-emerald-600 font-bold bg-emerald-100/50 px-2 rounded-md">
+                          <span className="text-emerald-600 font-bold bg-emerald-100/50 px-2 rounded-md shadow-sm">
                             Lv. {filterRatings[field.id] || 1}
                           </span>
                         </label>
@@ -589,7 +640,7 @@ export default function App() {
                               [field.id]: Number(e.target.value),
                             })
                           }
-                          className="w-full accent-emerald-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                          className="w-full accent-emerald-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer hover:accent-emerald-400 transition-all"
                         />
                       </div>
                     ))}
@@ -601,7 +652,7 @@ export default function App() {
                       setFilterPositions([]);
                       setFilterRatings({});
                     }}
-                    className="text-sm font-semibold text-slate-400 hover:text-slate-600 transition-colors"
+                    className="cursor-pointer text-sm font-semibold text-slate-400 hover:text-slate-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100 active:scale-95"
                   >
                     清除所有篩選條件
                   </button>
@@ -612,7 +663,7 @@ export default function App() {
             {/* 球友列表 */}
             <div className="space-y-12">
               {filteredFriends.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200">
+                <div className="text-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200 shadow-sm animate-fade-in">
                   <Users size={48} className="mx-auto mb-4 text-slate-300" />
                   <p className="font-medium text-lg">找不到符合條件的球友</p>
                 </div>
@@ -630,16 +681,16 @@ export default function App() {
                   return (
                     <div key={`section-${pos}`} className="animate-fade-in">
                       <div className="flex items-center justify-between mb-5 px-1">
-                        <h3 className="font-extrabold text-2xl text-slate-800 flex items-center gap-3">
-                          <span className="w-1.5 h-7 bg-emerald-500 rounded-full inline-block"></span>
+                        <h3 className="font-extrabold text-2xl text-slate-800 flex items-center gap-3 hover:translate-x-1 transition-transform cursor-default">
+                          <span className="w-1.5 h-7 bg-emerald-500 rounded-full inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
                           {pos}
                         </h3>
-                        <span className="bg-emerald-50 text-emerald-700 text-sm px-3 py-1 rounded-full font-bold border border-emerald-100">
+                        <span className="bg-emerald-50 text-emerald-700 text-sm px-3 py-1 rounded-full font-bold border border-emerald-100 shadow-sm">
                           {playersInPos.length} 人
                         </span>
                       </div>
                       {playersInPos.length === 0 ? (
-                        <div className="text-slate-400 text-sm py-6 bg-white/50 rounded-3xl border border-dashed border-slate-200 text-center font-medium">
+                        <div className="text-slate-400 text-sm py-6 bg-white/50 rounded-3xl border border-dashed border-slate-200 text-center font-medium transition-all hover:bg-slate-50">
                           目前無 {pos} 球友
                         </div>
                       ) : (
@@ -663,7 +714,7 @@ export default function App() {
 
         {/* ==================== 新增/編輯頁面 ==================== */}
         {activeTab === "form" && (
-          <div className="max-w-2xl mx-auto animate-fade-in">
+          <div className="max-w-2xl mx-auto animate-slide-up">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-extrabold text-slate-800">
                 {formData.id ? "編輯球友資料" : "新增球友"}
@@ -671,16 +722,16 @@ export default function App() {
               {formData.id && (
                 <button
                   onClick={() => openAddForm()}
-                  className="text-sm text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-full font-bold transition-colors"
+                  className="cursor-pointer text-sm text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-full font-bold transition-all active:scale-95 hover:shadow-sm"
                 >
                   切換為新增
                 </button>
               )}
             </div>
             <form onSubmit={handleSaveFriend} className="space-y-6">
-              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-md transition-shadow">
                 <div className="mb-6">
-                  <label className="block font-bold text-slate-700 mb-2">
+                  <label className="block font-bold text-slate-700 mb-2 cursor-pointer">
                     姓名 / 暱稱
                   </label>
                   <input
@@ -691,7 +742,7 @@ export default function App() {
                       setFormData({ ...formData, name: e.target.value })
                     }
                     placeholder="輸入名字..."
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800"
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800 hover:border-emerald-300"
                   />
                 </div>
                 <div>
@@ -708,14 +759,14 @@ export default function App() {
                             setFormData({ ...formData, positions: newPos }),
                           )
                         }
-                        className={`px-5 py-2.5 rounded-xl font-bold transition-all duration-300 border ${formData.positions.includes(pos) ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
+                        className={`cursor-pointer px-5 py-2.5 rounded-xl font-bold transition-all duration-300 border active:scale-90 ${formData.positions.includes(pos) ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
                       >
                         {pos}
                       </button>
                     ))}
                   </div>
                   {formData.positions.length === 0 && (
-                    <p className="text-red-500 text-sm font-medium mt-3 flex items-center gap-1">
+                    <p className="text-red-500 text-sm font-medium mt-3 flex items-center gap-1 animate-fade-in">
                       <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block"></span>
                       請至少選擇一個位置
                     </p>
@@ -723,12 +774,12 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-md transition-shadow">
                 <h3 className="font-bold text-lg text-slate-800 mb-6 border-b border-slate-100 pb-3">
                   進階資料
                 </h3>
                 {customFields.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-2xl">
+                  <p className="text-sm text-slate-400 text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                     目前沒有自訂欄位，可至設定頁新增
                   </p>
                 ) : (
@@ -736,11 +787,8 @@ export default function App() {
                     {customFields.map((field, index) => (
                       <div
                         key={field.id}
-                        className={
-                          index !== customFields.length - 1
-                            ? "border-b border-slate-100 pb-6"
-                            : ""
-                        }
+                        className={`${index !== customFields.length - 1 ? "border-b border-slate-100 pb-6" : ""} animate-fade-in`}
+                        style={{ animationDelay: `${index * 50}ms` }}
                       >
                         {field.type === "rating" ? (
                           <RatingInput
@@ -779,7 +827,7 @@ export default function App() {
                                       },
                                     })
                                   }
-                                  className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${formData.attributes[field.id] === opt ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+                                  className={`cursor-pointer flex-1 py-3 rounded-xl font-bold text-sm transition-all border active:scale-95 ${formData.attributes[field.id] === opt ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300"}`}
                                 >
                                   {opt}
                                 </button>
@@ -806,7 +854,7 @@ export default function App() {
                                       },
                                     })
                                   }
-                                  className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${formData.attributes[field.id] === opt ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
+                                  className={`cursor-pointer px-4 py-2.5 rounded-xl font-bold text-sm transition-all border active:scale-95 ${formData.attributes[field.id] === opt ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
                                 >
                                   {opt}
                                 </button>
@@ -832,7 +880,7 @@ export default function App() {
                                 })
                               }
                               placeholder={`輸入${field.name}...`}
-                              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800"
+                              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800 hover:border-emerald-300"
                             />
                           </div>
                         )}
@@ -846,7 +894,7 @@ export default function App() {
                 disabled={
                   !formData.name.trim() || formData.positions.length === 0
                 }
-                className="w-full bg-slate-800 text-white font-extrabold text-lg py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
+                className="cursor-pointer w-full bg-slate-800 text-white font-extrabold text-lg py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
               >
                 {formData.id ? "儲存修改" : "新增至圖鑑"}
               </button>
@@ -861,21 +909,22 @@ export default function App() {
               設定與雲端同步
             </h2>
             <p className="text-slate-500 mb-8 font-medium">
-              客製化你的圖鑑欄位，或在其他裝置輸入你的 Sync ID。
+              客製化你的圖鑑欄位，或在其他裝置輸入圖鑑房間代碼。
             </p>
 
-            {/* ====== 新增：跨裝置即時同步區塊 ====== */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.1)] border border-slate-700 text-white mb-10">
+            {/* ====== 修改：跨裝置即時同步區塊 ====== */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 md:p-8 rounded-3xl shadow-[0_12px_40px_rgb(0,0,0,0.15)] border border-slate-700 text-white mb-10 hover:shadow-[0_15px_50px_rgb(0,0,0,0.2)] transition-shadow">
               <h3 className="font-bold text-xl mb-6 flex items-center gap-2">
-                <Cloud size={24} className="text-emerald-400" /> 雲端即時同步
+                <Cloud size={24} className="text-emerald-400 animate-pulse" />{" "}
+                雲端圖鑑房間 (Room ID)
               </h3>
 
-              <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 mb-6">
+              <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50 mb-6 group">
                 <h4 className="font-medium text-emerald-400 mb-3 text-sm">
-                  你的專屬同步代碼 (Sync ID)
+                  你的專屬房間代碼
                 </h4>
-                <div className="flex items-center justify-between bg-slate-950 p-4 rounded-xl border border-slate-700">
-                  <span className="text-3xl font-mono font-bold tracking-[0.2em] text-white pl-2">
+                <div className="flex items-center justify-between bg-slate-950 p-4 rounded-xl border border-slate-700 group-hover:border-emerald-500/50 transition-colors">
+                  <span className="text-3xl font-mono font-bold tracking-[0.2em] text-white pl-2 select-all">
                     {syncId}
                   </span>
                   <button
@@ -884,11 +933,11 @@ export default function App() {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     }}
-                    className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-1 ${copied ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-white"}`}
+                    className={`cursor-pointer px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-1 active:scale-90 ${copied ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-white"}`}
                   >
                     {copied ? (
                       <>
-                        <HelpCircle size={16} /> 已複製
+                        <CheckCircle2 size={16} /> 已複製
                       </>
                     ) : (
                       <>
@@ -897,15 +946,15 @@ export default function App() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400 mt-3 font-medium">
+                <p className="text-xs text-slate-400 mt-3 font-medium leading-relaxed">
                   ✨
-                  在其他手機或電腦的網頁輸入這組代碼，即可自動同步所有球友名單！(修改會雙向即時同步)
+                  這就是你的「雲端存檔密碼」。用手機打開網頁，輸入這組代碼並點擊切換，兩邊的資料就會綁定在一起全自動同步！
                 </p>
               </div>
 
               <div className="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/50">
                 <h4 className="font-medium text-emerald-400 mb-3 text-sm">
-                  切換 / 載入其他同步代碼
+                  進入其他房間代碼
                 </h4>
                 <div className="flex gap-2">
                   <input
@@ -914,14 +963,14 @@ export default function App() {
                     onChange={(e) =>
                       setInputSyncId(e.target.value.toUpperCase())
                     }
-                    placeholder="輸入 6 碼 Sync ID..."
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-5 py-3 text-white outline-none focus:border-emerald-500 font-mono text-lg uppercase tracking-widest placeholder:text-slate-600 placeholder:tracking-normal"
+                    placeholder="輸入 6 碼 Room ID..."
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-5 py-3 text-white outline-none focus:border-emerald-500 font-mono text-lg uppercase tracking-widest placeholder:text-slate-600 placeholder:tracking-normal transition-colors"
                     maxLength={6}
                   />
                   <button
                     onClick={handleSwitchSyncId}
                     disabled={inputSyncId.length !== 6}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-6 py-3 rounded-xl font-bold transition-colors"
+                    className="cursor-pointer bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-6 py-3 rounded-xl font-bold transition-all active:scale-95 disabled:active:scale-100 shadow-md disabled:shadow-none"
                   >
                     切換
                   </button>
@@ -933,10 +982,10 @@ export default function App() {
 
             <form
               onSubmit={handleAddField}
-              className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 mb-10"
+              className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 mb-10 hover:shadow-md transition-shadow"
             >
               <h3 className="font-bold text-emerald-600 mb-5 flex items-center gap-2 text-lg">
-                <div className="p-1.5 bg-emerald-100 rounded-lg">
+                <div className="p-1.5 bg-emerald-100 rounded-lg shadow-sm">
                   <Plus size={18} />
                 </div>{" "}
                 新增項目欄位
@@ -948,7 +997,7 @@ export default function App() {
                   placeholder="輸入欄位名稱 (例如：身高、發球)"
                   value={newFieldName}
                   onChange={(e) => setNewFieldName(e.target.value)}
-                  className="px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all hover:border-emerald-300"
                 />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
@@ -961,9 +1010,15 @@ export default function App() {
                       key={type.id}
                       type="button"
                       onClick={() => setNewFieldType(type.id)}
-                      className={`py-3 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all border ${newFieldType === type.id ? "bg-emerald-50 text-emerald-600 border-emerald-400 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                      className={`cursor-pointer py-3 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-2 transition-all border active:scale-95 ${newFieldType === type.id ? "bg-emerald-50 text-emerald-600 border-emerald-400 shadow-sm -translate-y-0.5" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:border-slate-300"}`}
                     >
-                      <type.icon size={20} /> {type.label}
+                      <type.icon
+                        size={20}
+                        className={
+                          newFieldType === type.id ? "text-emerald-500" : ""
+                        }
+                      />{" "}
+                      {type.label}
                     </button>
                   ))}
                 </div>
@@ -974,12 +1029,12 @@ export default function App() {
                     placeholder="輸入選項，請用逗號分隔 (例: A,B,C)"
                     value={newFieldOptions}
                     onChange={(e) => setNewFieldOptions(e.target.value)}
-                    className="px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all animate-fade-in"
+                    className="px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all animate-slide-up hover:border-emerald-300"
                   />
                 )}
                 <button
                   type="submit"
-                  className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-md shadow-emerald-600/20 transition-colors"
+                  className="cursor-pointer w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-bold shadow-[0_4px_15px_rgba(16,185,129,0.3)] transition-all active:scale-[0.98]"
                 >
                   加入新欄位
                 </button>
@@ -988,7 +1043,7 @@ export default function App() {
 
             <div>
               <h3 className="font-bold text-slate-800 mb-4 text-xl">
-                目前的欄位清單
+                目前的欄位順序
               </h3>
               <div className="space-y-4">
                 {customFields.map((field, index) => (
@@ -1000,14 +1055,14 @@ export default function App() {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
-                    className={`flex justify-between items-center bg-white p-4 rounded-2xl border shadow-sm transition-all duration-200 ${draggedIdx === index ? "opacity-40 border-emerald-500 scale-[0.98]" : dragOverIdx === index ? "border-emerald-500 border-dashed bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}
+                    className={`flex justify-between items-center bg-white p-4 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md ${draggedIdx === index ? "opacity-40 border-emerald-500 scale-[0.98]" : dragOverIdx === index ? "border-emerald-500 border-dashed bg-emerald-50 scale-[1.02]" : "border-slate-200 hover:border-emerald-300"}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-emerald-500 py-2">
+                      <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-emerald-500 py-2 transition-colors">
                         <GripVertical size={20} />
                       </div>
                       <div
-                        className={`p-3 rounded-xl ${field.type === "rating" ? "bg-amber-100 text-amber-600" : field.type === "text" ? "bg-blue-100 text-blue-600" : field.type === "yesno" ? "bg-emerald-100 text-emerald-600" : "bg-purple-100 text-purple-600"}`}
+                        className={`p-3 rounded-xl shadow-sm ${field.type === "rating" ? "bg-amber-100 text-amber-600" : field.type === "text" ? "bg-blue-100 text-blue-600" : field.type === "yesno" ? "bg-emerald-100 text-emerald-600" : "bg-purple-100 text-purple-600"}`}
                       >
                         {field.type === "rating" ? (
                           <Star size={20} />
@@ -1040,7 +1095,7 @@ export default function App() {
                           type="button"
                           onClick={() => moveField(index, "up")}
                           disabled={index === 0}
-                          className="p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors"
+                          className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
                         >
                           <ArrowUp size={16} />
                         </button>
@@ -1048,7 +1103,7 @@ export default function App() {
                           type="button"
                           onClick={() => moveField(index, "down")}
                           disabled={index === customFields.length - 1}
-                          className="p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors"
+                          className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
                         >
                           <ArrowDown size={16} />
                         </button>
@@ -1056,7 +1111,7 @@ export default function App() {
                       <div className="h-8 w-px bg-slate-100 mx-2 hidden md:block"></div>
                       <button
                         onClick={() => handleDeleteField(field.id)}
-                        className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                        className="cursor-pointer p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
                       >
                         <Trash2 size={20} />
                       </button>
@@ -1064,7 +1119,7 @@ export default function App() {
                   </div>
                 ))}
                 {customFields.length === 0 && (
-                  <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl py-12">
+                  <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl py-12 transition-all hover:bg-slate-100">
                     <p className="text-slate-400 font-medium">
                       目前沒有自訂欄位
                     </p>
@@ -1078,7 +1133,7 @@ export default function App() {
 
       {/* ==================== 浮動 / 固定 導覽列 ==================== */}
       <nav
-        className={`fixed z-50 flex overflow-hidden transition-all duration-300 select-none bottom-0 left-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-200 pb-safe md:bottom-10 md:right-10 md:left-auto md:w-auto md:border md:rounded-3xl md:shadow-[0_10px_40px_rgba(0,0,0,0.12)] md:pb-0`}
+        className={`fixed z-50 flex overflow-hidden transition-all duration-500 ease-out select-none bottom-0 left-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-200 pb-safe md:bottom-10 md:right-10 md:left-auto md:w-auto md:border md:rounded-3xl md:shadow-[0_15px_50px_rgba(0,0,0,0.15)] md:pb-0 hover:shadow-[0_20px_60px_rgba(0,0,0,0.2)]`}
         style={
           window.innerWidth >= 768 && (navPos.x !== 0 || navPos.y !== 0)
             ? { transform: `translate(${navPos.x}px, ${navPos.y}px)` }
@@ -1086,7 +1141,7 @@ export default function App() {
         }
       >
         <div
-          className="hidden md:flex items-center justify-center px-4 cursor-grab active:cursor-grabbing hover:bg-slate-50 text-slate-400 hover:text-slate-600 border-r border-slate-100 transition-colors"
+          className="hidden md:flex items-center justify-center px-4 cursor-grab active:cursor-grabbing hover:bg-slate-50 text-slate-400 hover:text-emerald-500 border-r border-slate-100 transition-colors"
           onMouseDown={handleNavMouseDown}
         >
           <GripVertical size={24} />
@@ -1108,22 +1163,22 @@ export default function App() {
                 if (tab.id === "form" && activeTab !== "form") openAddForm();
                 else setActiveTab(tab.id);
               }}
-              className={`flex-1 md:flex-none md:w-28 py-3.5 md:py-4 flex flex-col items-center gap-1.5 transition-all duration-300 relative ${activeTab === tab.id ? "text-emerald-600" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50/50"}`}
+              className={`cursor-pointer flex-1 md:flex-none md:w-28 py-3.5 md:py-4 flex flex-col items-center gap-1.5 transition-all duration-300 relative group ${activeTab === tab.id ? "text-emerald-600 bg-emerald-50/30" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
             >
               <div
-                className={`transition-transform duration-300 ${activeTab === tab.id ? "scale-110" : "scale-100"}`}
+                className={`transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 ${activeTab === tab.id ? "scale-110 -translate-y-0.5" : "scale-100"}`}
               >
                 <tab.icon
                   size={22}
                   strokeWidth={activeTab === tab.id ? 2.5 : 2}
                 />
               </div>
-              <span className="text-[11px] font-bold tracking-wide">
+              <span className="text-[11px] font-bold tracking-wide transition-colors">
                 {tab.label}
               </span>
-              {activeTab === tab.id && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-emerald-500 rounded-b-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-              )}
+              <div
+                className={`absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-emerald-500 rounded-b-full shadow-[0_0_10px_rgba(16,185,129,0.6)] transition-all duration-300 ${activeTab === tab.id ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`}
+              ></div>
             </button>
           ))}
         </div>
@@ -1132,10 +1187,17 @@ export default function App() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
         .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+        /* 隱藏 scrollbar 但保留滾動功能 (讓畫面更乾淨) */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `,
         }}
       />
