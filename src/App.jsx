@@ -40,6 +40,7 @@ import {
   Phone,
   Smartphone,
   Tags,
+  Heart,
 } from "lucide-react";
 
 // 引入 Firebase 模組
@@ -367,6 +368,7 @@ export default function App() {
                   ...friend,
                   attributes: newAttrs,
                   groupIds: friend.groupIds || [],
+                  isFavorite: friend.isFavorite || false, // 確保 isFavorite 被保留
                 }
               : friend;
           });
@@ -713,6 +715,7 @@ export default function App() {
         positions: Array.isArray(f.positions) ? f.positions : [],
         groupIds: Array.isArray(f.groupIds) ? f.groupIds : [],
         attributes: f.attributes || {},
+        isFavorite: f.isFavorite || false, // 保留 isFavorite 屬性
       }));
 
       await updateCloudData(importedFriends, importedFields, importedGroups);
@@ -743,6 +746,7 @@ export default function App() {
     positions: [],
     groupIds: [],
     attributes: {},
+    isFavorite: false, // 加入 isFavorite 狀態以便編輯表單能記憶
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
@@ -751,6 +755,7 @@ export default function App() {
   const [filterPositions, setFilterPositions] = useState([]);
   const [filterGroups, setFilterGroups] = useState([]);
   const [filterValues, setFilterValues] = useState({});
+  const [filterFavorite, setFilterFavorite] = useState(false); // 新增「最愛」篩選
   const [sortBy, setSortBy] = useState("skill");
 
   // 計算是否啟用篩選
@@ -758,6 +763,7 @@ export default function App() {
     filterPositions.length +
     filterGroups.length +
     Object.keys(filterValues).length +
+    (filterFavorite ? 1 : 0) +
     (sortBy !== "skill" && sortBy !== "" ? 1 : 0);
 
   // ====== 互動處理邏輯 ======
@@ -791,6 +797,15 @@ export default function App() {
     setSelectedFriend(null);
     setIsEditModalOpen(false);
     showToast("已刪除該球友", "success");
+    await updateCloudData(newFriends, customFields, groups);
+  };
+
+  // ----- 加入最愛 Toggle -----
+  const handleToggleFavorite = async (friendId) => {
+    const newFriends = friends.map((f) =>
+      f.id === friendId ? { ...f, isFavorite: !f.isFavorite } : f,
+    );
+    setFriends(newFriends);
     await updateCloudData(newFriends, customFields, groups);
   };
 
@@ -1025,6 +1040,7 @@ export default function App() {
       positions: [],
       groupIds: [],
       attributes: initialAttributes,
+      isFavorite: false,
     });
     setIsAddingGroup(false);
     setIsManagingGroups(false);
@@ -1047,6 +1063,7 @@ export default function App() {
       positions: [...friend.positions],
       groupIds: friend.groupIds ? [...friend.groupIds] : [],
       attributes: initialAttributes,
+      isFavorite: friend.isFavorite || false,
     });
     setIsAddingGroup(false);
     setIsManagingGroups(false);
@@ -1150,6 +1167,9 @@ export default function App() {
         !friend.name.toLowerCase().includes(filterName.toLowerCase())
       )
         return false;
+      if (filterFavorite && !friend.isFavorite) {
+        return false;
+      }
       if (filterPositions.length > 0) {
         const hasMatchingPosition = friend.positions.some((pos) =>
           filterPositions.includes(pos),
@@ -1212,6 +1232,7 @@ export default function App() {
   }, [
     friends,
     filterName,
+    filterFavorite,
     filterPositions,
     filterGroups,
     filterValues,
@@ -1391,26 +1412,59 @@ export default function App() {
 
     const isRainbow =
       orientationField && friend.attributes[orientationField.id] === "同性戀";
+    const isFavorite = friend.isFavorite;
+
     const genderVal = genderField ? friend.attributes[genderField.id] : null;
     const heightVal = heightField ? friend.attributes[heightField.id] : null;
     const contactVal = contactField ? friend.attributes[contactField.id] : null;
 
-    const outerClass = isRainbow
-      ? "relative p-[3px] rounded-3xl shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 group cursor-pointer rainbow-border-animate"
-      : "bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 group cursor-pointer";
+    let outerClass =
+      "transition-all duration-300 group cursor-pointer rounded-3xl h-full ";
+    let innerClass = "h-full w-full flex flex-col relative ";
 
-    const innerClass = isRainbow
-      ? "bg-white p-[17px] rounded-[calc(1.5rem-3px)] h-full w-full flex flex-col"
-      : "h-full w-full flex flex-col";
+    // 卡面樣式邏輯 (金屬優先於彩虹)
+    if (isFavorite) {
+      outerClass +=
+        "metallic-premium shadow-[0_8px_30px_rgba(212,196,168,0.25)] hover:shadow-[0_15px_40px_rgba(212,196,168,0.4)] hover:-translate-y-1 p-5 border border-[#e8dbce]";
+      innerClass += "z-10"; // 確保內容在光澤上方
+    } else if (isRainbow) {
+      outerClass +=
+        "relative p-[3px] shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1 rainbow-border-animate";
+      innerClass += "bg-white p-[17px] rounded-[calc(1.5rem-3px)]";
+    } else {
+      outerClass +=
+        "bg-white border border-slate-100 p-5 shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1";
+    }
 
     return (
       <div onClick={() => setSelectedFriend(friend)} className={outerClass}>
         <div className={innerClass}>
           {/* 第一排：姓名與操作按鈕 (獨立容器) */}
           <div className="flex justify-between items-start w-full">
-            <h3 className="font-bold text-xl text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors truncate flex-1 min-w-0 pr-2">
-              {friend.name}
-            </h3>
+            <div className="flex items-start gap-1 flex-1 min-w-0 pr-2">
+              <h3 className="font-bold text-xl text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors truncate pt-0.5">
+                {friend.name}
+              </h3>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(friend.id);
+                }}
+                className={`shrink-0 p-1.5 rounded-full transition-all active:scale-75 ${
+                  isFavorite
+                    ? "text-rose-500 bg-white/60 shadow-sm hover:bg-white"
+                    : "text-slate-300 hover:text-rose-400 hover:bg-slate-50"
+                }`}
+                title={isFavorite ? "取消最愛" : "加入最愛"}
+              >
+                <Heart
+                  size={18}
+                  fill={isFavorite ? "currentColor" : "none"}
+                  className={isFavorite ? "drop-shadow-sm" : ""}
+                />
+              </button>
+            </div>
+
             <div
               className="flex gap-2 shrink-0"
               onClick={(e) => e.stopPropagation()}
@@ -1434,13 +1488,21 @@ export default function App() {
                 <div className="opacity-100 md:opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1 translate-x-2 md:translate-x-0">
                   <button
                     onClick={() => openEditForm(friend)}
-                    className="cursor-pointer p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-all hover:rotate-12 active:scale-90"
+                    className={`cursor-pointer p-2.5 rounded-full transition-all hover:rotate-12 active:scale-90 ${
+                      isFavorite
+                        ? "text-slate-500 hover:text-emerald-600 hover:bg-white/60"
+                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                    }`}
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => setConfirmDeleteId(friend.id)}
-                    className="cursor-pointer p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all hover:-rotate-12 active:scale-90"
+                    className={`cursor-pointer p-2.5 rounded-full transition-all hover:-rotate-12 active:scale-90 ${
+                      isFavorite
+                        ? "text-slate-500 hover:text-red-500 hover:bg-white/60"
+                        : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                    }`}
                   >
                     <Trash2 size={18} />
                   </button>
@@ -1457,7 +1519,9 @@ export default function App() {
                 className={`shrink-0 text-xs px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm ${
                   p === posKey
                     ? "bg-emerald-500 text-white"
-                    : "bg-slate-100 text-slate-500"
+                    : isFavorite
+                      ? "bg-white/60 text-slate-600"
+                      : "bg-slate-100 text-slate-500"
                 }`}
               >
                 {p}
@@ -1470,7 +1534,11 @@ export default function App() {
               return (
                 <span
                   key={gid}
-                  className={`shrink-0 text-xs px-2.5 py-1 rounded-md font-bold border shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-md font-bold border shadow-sm ${
+                    isFavorite
+                      ? "bg-white/50 border-white/40 text-slate-700" // 金屬卡片時的特別樣式
+                      : `${colors.bg} ${colors.text} ${colors.border}`
+                  }`}
                 >
                   {g.name}
                 </span>
@@ -1479,16 +1547,26 @@ export default function App() {
           </div>
 
           {/* 第三排：精簡資訊區塊 */}
-          <div className="flex items-center gap-3 mt-auto pt-4 border-t border-slate-50 text-sm w-full overflow-hidden">
+          <div
+            className={`flex items-center gap-3 mt-auto pt-4 border-t text-sm w-full overflow-hidden ${isFavorite ? "border-slate-300/30" : "border-slate-50"}`}
+          >
             {genderVal && (
               <div className="text-slate-600 flex items-center gap-1 shrink-0">
-                <User size={14} className="text-slate-400 shrink-0" />
+                <User
+                  size={14}
+                  className={isFavorite ? "text-slate-500" : "text-slate-400"}
+                  shrink-0
+                />
                 <span className="truncate">{genderVal}</span>
               </div>
             )}
             {heightVal && (
               <div className="text-slate-600 flex items-center gap-1 shrink-0">
-                <Hash size={14} className="text-slate-400 shrink-0" />
+                <Hash
+                  size={14}
+                  className={isFavorite ? "text-slate-500" : "text-slate-400"}
+                  shrink-0
+                />
                 <span className="truncate">{heightVal} cm</span>
               </div>
             )}
@@ -1503,7 +1581,11 @@ export default function App() {
                   target="_blank"
                   rel="noreferrer"
                   title={contactVal.id}
-                  className="flex items-center gap-1.5 bg-slate-50 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg transition-colors border border-slate-100 hover:border-emerald-200 min-w-0 max-w-full"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors min-w-0 max-w-full ${
+                    isFavorite
+                      ? "bg-white/50 border border-white/60 hover:bg-white/80"
+                      : "bg-slate-50 border border-slate-100 hover:bg-emerald-50 hover:border-emerald-200"
+                  }`}
                 >
                   <img
                     src={`src/assets/icons/${getIconPrefix(contactVal.platform)}-p.svg`}
@@ -1563,18 +1645,41 @@ export default function App() {
   const formFieldsJSX = (
     <>
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-md transition-shadow">
-        <div className="mb-6">
-          <label className="block font-bold text-slate-700 mb-2 cursor-pointer">
-            姓名 / 暱稱
-          </label>
-          <input
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="輸入名字..."
-            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800 hover:border-emerald-300"
-          />
+        <div className="mb-6 flex justify-between items-start">
+          <div className="flex-1 mr-4">
+            <label className="block font-bold text-slate-700 mb-2 cursor-pointer">
+              姓名 / 暱稱
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              placeholder="輸入名字..."
+              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition-all text-slate-800 hover:border-emerald-300"
+            />
+          </div>
+          <div className="pt-8">
+            <button
+              type="button"
+              onClick={() =>
+                setFormData({ ...formData, isFavorite: !formData.isFavorite })
+              }
+              className={`p-3 rounded-2xl transition-all active:scale-90 border ${
+                formData.isFavorite
+                  ? "bg-rose-50 border-rose-200 text-rose-500 shadow-sm shadow-rose-500/10"
+                  : "bg-slate-50 border-slate-200 text-slate-300 hover:text-rose-400 hover:bg-white"
+              }`}
+              title="加入最愛"
+            >
+              <Heart
+                size={24}
+                fill={formData.isFavorite ? "currentColor" : "none"}
+              />
+            </button>
+          </div>
         </div>
         <div>
           <label className="block font-bold text-slate-700 mb-3">
@@ -2194,50 +2299,68 @@ export default function App() {
           onClick={() => setSelectedFriend(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-slide-up overflow-hidden"
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-slide-up overflow-hidden relative"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header: 固定在頂部 */}
-            <div className="shrink-0 bg-white/90 backdrop-blur-md px-6 py-5 border-b border-slate-100 flex justify-between items-start z-10">
+            <div
+              className={`shrink-0 bg-white/90 backdrop-blur-md px-6 py-5 border-b flex justify-between items-start z-10 ${selectedFriend.isFavorite ? "border-amber-200/50 bg-gradient-to-r from-amber-50/90 to-white/90" : "border-slate-100"}`}
+            >
               <div className="min-w-0 pr-4">
-                <h2 className="text-2xl font-extrabold text-slate-800 break-words">
-                  {selectedFriend.name}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-extrabold text-slate-800 break-words">
+                    {selectedFriend.name}
+                  </h2>
+                  {selectedFriend.isFavorite && (
+                    <Heart
+                      size={20}
+                      className="text-rose-500 fill-rose-500 drop-shadow-sm shrink-0"
+                    />
+                  )}
+                </div>
                 {/* Modal 內的標籤可自由折行 */}
-                <div className="flex gap-1.5 flex-wrap items-center mt-2 w-full">
-                  {selectedFriend.positions.map((p) => (
-                    <span
-                      key={p}
-                      className="bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-md font-bold shadow-sm"
-                    >
-                      {p}
-                    </span>
-                  ))}
-                  {selectedFriend.groupIds?.map((gid) => {
-                    const g = groups.find((x) => x.id === gid);
-                    if (!g) return null;
-                    const colors = GROUP_COLORS[g.color] || GROUP_COLORS.gray;
-                    return (
+                <div className="flex flex-col gap-2 mt-2 w-full">
+                  <div className="flex gap-1.5 flex-wrap items-center">
+                    {selectedFriend.positions.map((p) => (
                       <span
-                        key={gid}
-                        className={`text-xs px-2.5 py-1 rounded-md font-bold border shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                        key={p}
+                        className="bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-md font-bold shadow-sm"
                       >
-                        {g.name}
+                        {p}
                       </span>
-                    );
-                  })}
+                    ))}
+                  </div>
+                  {selectedFriend.groupIds &&
+                    selectedFriend.groupIds.length > 0 && (
+                      <div className="flex gap-1.5 flex-wrap items-center mt-0.5">
+                        {selectedFriend.groupIds.map((gid) => {
+                          const g = groups.find((x) => x.id === gid);
+                          if (!g) return null;
+                          const colors =
+                            GROUP_COLORS[g.color] || GROUP_COLORS.gray;
+                          return (
+                            <span
+                              key={gid}
+                              className={`text-xs px-2 py-1 rounded-md font-bold border shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                            >
+                              {g.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                 </div>
               </div>
               <button
                 onClick={() => setSelectedFriend(null)}
-                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors active:scale-95 cursor-pointer shrink-0 mt-1"
+                className={`p-2 rounded-full transition-colors active:scale-95 cursor-pointer shrink-0 mt-1 ${selectedFriend.isFavorite ? "bg-amber-100 hover:bg-amber-200 text-amber-700" : "bg-slate-100 hover:bg-slate-200 text-slate-500"}`}
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Content: 滾動區域 */}
-            <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-white">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-white relative z-10">
               {customFields.map((field) => {
                 const rawVal = selectedFriend.attributes[field.id];
                 const isEmpty =
@@ -2344,7 +2467,7 @@ export default function App() {
             </div>
 
             {/* Footer: 固定在底部 */}
-            <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 flex gap-3 mt-auto">
+            <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 flex gap-3 mt-auto z-10 relative">
               <button
                 onClick={() => openEditForm(selectedFriend)}
                 className="flex-1 cursor-pointer bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-95 flex justify-center items-center gap-2"
@@ -2428,10 +2551,12 @@ export default function App() {
 
             {/* Content: 滾動區域 */}
             <div className="p-6 overflow-y-auto flex-1 bg-white">
-              <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 mb-5">
-                <div className="flex items-center gap-3">
-                  <label className="font-medium text-slate-500 text-sm flex items-center gap-1.5 whitespace-nowrap">
-                    <ArrowUpDown size={14} /> 排序方式
+              {/* 排序方式與特殊條件 */}
+              <div className="flex flex-col sm:flex-row gap-6 border-b border-slate-100 pb-6 mb-6">
+                <div className="flex-1">
+                  <label className="font-bold text-slate-700 mb-3 text-sm flex items-center gap-1.5 whitespace-nowrap tracking-wide">
+                    <ArrowUpDown size={16} className="text-slate-400" />{" "}
+                    排序方式
                   </label>
                   <CustomSelect
                     value={sortBy}
@@ -2447,14 +2572,36 @@ export default function App() {
                           label: `依 ${f.name} 高低`,
                         })),
                     ]}
-                    className="flex-1"
+                    className="w-full"
                     innerClassName="bg-slate-50"
                   />
+                </div>
+
+                <div className="flex-1">
+                  <label className="font-bold text-slate-700 mb-3 text-sm tracking-wide">
+                    特殊篩選
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setFilterFavorite(!filterFavorite)}
+                      className={`cursor-pointer px-4 py-[13px] rounded-2xl font-bold text-sm transition-all duration-300 border active:scale-95 flex items-center gap-1.5 w-full justify-center ${
+                        filterFavorite
+                          ? "bg-rose-50 border-rose-200 text-rose-500 shadow-sm"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Heart
+                        size={16}
+                        fill={filterFavorite ? "currentColor" : "none"}
+                      />
+                      僅顯示最愛
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {groups.length > 0 && (
-                <div className="mb-6 border-b border-slate-100 pb-5">
+                <div className="mb-6 border-b border-slate-100 pb-6">
                   <label className="block font-bold text-slate-700 mb-3 text-sm tracking-wide">
                     包含群組
                   </label>
@@ -2482,7 +2629,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="mb-6">
+              <div className="mb-6 border-b border-slate-100 pb-6">
                 <label className="block font-bold text-slate-700 mb-3 text-sm tracking-wide">
                   包含位置
                 </label>
@@ -2646,6 +2793,7 @@ export default function App() {
                   setFilterPositions([]);
                   setFilterGroups([]);
                   setFilterValues({});
+                  setFilterFavorite(false);
                   setSortBy("skill");
                 }}
                 className="cursor-pointer whitespace-nowrap text-sm font-semibold text-slate-500 hover:text-red-500 transition-colors px-4 py-2 rounded-xl hover:bg-white border border-transparent hover:border-red-100 active:scale-95"
@@ -2763,6 +2911,7 @@ export default function App() {
                         setFilterPositions([]);
                         setFilterGroups([]);
                         setFilterValues({});
+                        setFilterFavorite(false);
                         setSortBy("skill");
                       }}
                       className="cursor-pointer whitespace-nowrap px-4 bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 rounded-2xl flex items-center justify-center transition-all active:scale-95 font-bold text-sm"
@@ -3519,6 +3668,29 @@ export default function App() {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
+        }
+
+        /* 金屬高質感卡片 (最愛) */
+        .metallic-premium {
+          background: linear-gradient(145deg, #ffffff 0%, #fdfbf7 30%, #f4ebd8 80%, #ebdcc2 100%);
+          position: relative;
+          overflow: hidden;
+          z-index: 1;
+        }
+        .metallic-premium::before {
+          content: '';
+          position: absolute;
+          top: 0; left: -100%; width: 50%; height: 100%;
+          background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+          transform: skewX(-25deg);
+          animation: metallic-shine 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: -1;
+          pointer-events: none;
+        }
+        @keyframes metallic-shine {
+          0% { left: -100%; }
+          20% { left: 200%; }
+          100% { left: 200%; }
         }
 
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
