@@ -39,6 +39,7 @@ import {
   ChevronDown,
   Phone,
   Smartphone,
+  Tags,
 } from "lucide-react";
 
 // 引入 Firebase 模組
@@ -83,7 +84,37 @@ const db = getFirestore(app);
 
 // 常數定義
 const POSITIONS = ["舉球", "主攻", "副攻", "攔中", "自由"];
-const PLATFORM_LABELS = { ig: "IG", fb: "FB", line: "LINE", phone: "手機" };
+
+// 高級感彩虹色調色盤 (低飽和度粉色系)
+const GROUP_COLORS = {
+  red: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+  orange: {
+    bg: "bg-orange-50",
+    text: "text-orange-700",
+    border: "border-orange-200",
+  },
+  yellow: {
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+    border: "border-amber-200",
+  },
+  green: {
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    border: "border-emerald-200",
+  },
+  blue: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  purple: {
+    bg: "bg-indigo-50",
+    text: "text-indigo-700",
+    border: "border-indigo-200",
+  },
+  gray: {
+    bg: "bg-slate-50",
+    text: "text-slate-700",
+    border: "border-slate-200",
+  },
+};
 
 const getIconPrefix = (platformId) => {
   if (platformId === "ig") return "instagram";
@@ -130,7 +161,7 @@ export default function App() {
   const [toast, setToast] = useState({
     show: false,
     message: "",
-    type: "success",
+    type: "success", // 'success' | 'error' | 'warning'
   });
   const toastTimeout = useRef(null);
 
@@ -170,12 +201,13 @@ export default function App() {
   }, [profile]);
 
   // ====== 雲端同步與資料狀態 ======
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
   const [importCode, setImportCode] = useState("");
   const [importConfirm, setImportConfirm] = useState(false);
 
   const [activeTab, setActiveTab] = useState("list");
   const [friends, setFriends] = useState([]);
+  const [groups, setGroups] = useState([]); // 新增群組狀態
   const [customFields, setCustomFields] = useState([]);
 
   // ====== Lightbox Modal 狀態 ======
@@ -184,6 +216,25 @@ export default function App() {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const fileInputRef = useRef(null);
+
+  // ====== 群組設定與表單狀態 ======
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupColor, setNewGroupColor] = useState("gray");
+  const [isAddingGroup, setIsAddingGroup] = useState(false);
+  const [isManagingGroups, setIsManagingGroups] = useState(false);
+
+  // ====== 欄位設定 ======
+  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState("rating");
+  const [newFieldOptions, setNewFieldOptions] = useState("");
+  const [isMultiChoice, setIsMultiChoice] = useState(false);
+
+  // ====== 導覽列拖曳 ======
+  const [navPos, setNavPos] = useState({ x: 0, y: 0 });
+  const [isDraggingNav, setIsDraggingNav] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // 1. 監聽登入狀態
   useEffect(() => {
@@ -208,7 +259,9 @@ export default function App() {
       } else {
         setProfile(null);
         setFriends([]);
+        setGroups([]);
         setCustomFields([]);
+        setIsSyncing(true);
       }
       setAuthLoading(false);
     });
@@ -235,10 +288,11 @@ export default function App() {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
-          // ====== 自動資料遷移 (無縫升級現有帳號) ======
+          // ====== 自動資料遷移 ======
           let needsMigration = false;
           let migratedFields = [...(data.customFields || [])];
           let migratedFriends = [...(data.friends || [])];
+          let migratedGroups = [...(data.groups || [])];
 
           // 1. 更新舊的欄位選項設定
           migratedFields = migratedFields.map((field) => {
@@ -281,59 +335,75 @@ export default function App() {
             return field;
           });
 
-          // 2. 幫球員舊資料替換成新選項文字
+          // 2. 幫球員舊資料替換成新選項文字與補充初始 groupIds
+          migratedFriends = migratedFriends.map((friend) => {
+            let newAttrs = { ...friend.attributes };
+            let friendChanged = false;
+
+            // 初始化 groupIds 防止未定義錯誤
+            if (!friend.groupIds) {
+              friendChanged = true;
+            }
+
+            if (
+              newAttrs.orientation === "不確定" ||
+              newAttrs.orientation === "第三性"
+            ) {
+              newAttrs.orientation = "其他";
+              friendChanged = true;
+            }
+            if (
+              Array.isArray(newAttrs.goodAt) &&
+              newAttrs.goodAt.includes("混合網")
+            ) {
+              newAttrs.goodAt = newAttrs.goodAt.map((opt) =>
+                opt === "混合網" ? "混排女網" : opt,
+              );
+              friendChanged = true;
+            }
+
+            return friendChanged || !friend.groupIds
+              ? {
+                  ...friend,
+                  attributes: newAttrs,
+                  groupIds: friend.groupIds || [],
+                }
+              : friend;
+          });
+
           if (
-            needsMigration ||
             migratedFriends.some(
-              (f) =>
-                f.attributes?.orientation === "不確定" ||
-                f.attributes?.orientation === "第三性" ||
-                f.attributes?.goodAt?.includes("混合網"),
+              (f) => f !== data.friends?.find((x) => x.id === f.id),
             )
           ) {
             needsMigration = true;
-            migratedFriends = migratedFriends.map((friend) => {
-              let newAttrs = { ...friend.attributes };
-              let friendChanged = false;
-
-              if (
-                newAttrs.orientation === "不確定" ||
-                newAttrs.orientation === "第三性"
-              ) {
-                newAttrs.orientation = "其他";
-                friendChanged = true;
-              }
-              if (
-                Array.isArray(newAttrs.goodAt) &&
-                newAttrs.goodAt.includes("混合網")
-              ) {
-                newAttrs.goodAt = newAttrs.goodAt.map((opt) =>
-                  opt === "混合網" ? "混排女網" : opt,
-                );
-                friendChanged = true;
-              }
-
-              return friendChanged
-                ? { ...friend, attributes: newAttrs }
-                : friend;
-            });
           }
 
           // 3. 如果有修改，自動寫回雲端覆蓋舊資料
           if (needsMigration) {
             setDoc(
               docRef,
-              { friends: migratedFriends, customFields: migratedFields },
+              {
+                friends: migratedFriends,
+                customFields: migratedFields,
+                groups: migratedGroups,
+              },
               { merge: true },
             ).catch((err) => console.error("資料升級失敗:", err));
           }
 
           setFriends(migratedFriends);
           setCustomFields(migratedFields);
+          setGroups(migratedGroups);
         } else {
           setFriends([]);
+          setGroups([]);
           setCustomFields(INITIAL_CUSTOM_FIELDS);
-          setDoc(docRef, { friends: [], customFields: INITIAL_CUSTOM_FIELDS });
+          setDoc(docRef, {
+            friends: [],
+            groups: [],
+            customFields: INITIAL_CUSTOM_FIELDS,
+          });
         }
         setIsSyncing(false);
       },
@@ -395,6 +465,7 @@ export default function App() {
           doc(db, "artifacts", appId, "users", newUid, "roster", "data"),
           {
             friends: [],
+            groups: [],
             customFields: INITIAL_CUSTOM_FIELDS,
           },
         );
@@ -477,7 +548,8 @@ export default function App() {
     showToast("已成功登出", "success");
   };
 
-  const updateCloudData = async (newFriends, newFields) => {
+  // 加上群組參數
+  const updateCloudData = async (newFriends, newFields, newGroups = groups) => {
     if (!user) return;
     try {
       const docRef = doc(
@@ -489,7 +561,11 @@ export default function App() {
         "roster",
         "data",
       );
-      await setDoc(docRef, { friends: newFriends, customFields: newFields });
+      await setDoc(docRef, {
+        friends: newFriends,
+        customFields: newFields,
+        groups: newGroups,
+      });
     } catch (e) {
       showToast("儲存失敗，請檢查網路連線", "error");
     }
@@ -537,7 +613,11 @@ export default function App() {
 
       if (rosterSnap.exists()) {
         const data = rosterSnap.data();
-        await updateCloudData(data.friends || [], data.customFields || []);
+        await updateCloudData(
+          data.friends || [],
+          data.customFields || [],
+          data.groups || [],
+        );
         showToast("雲端資料匯入成功！已覆蓋現有圖鑑。", "success");
         setImportCode("");
         setImportConfirm(false);
@@ -578,6 +658,7 @@ export default function App() {
       version: 1,
       exportDate: new Date().toISOString(),
       customFields,
+      groups,
       friends,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -607,6 +688,7 @@ export default function App() {
 
       let importedFriends = [];
       let importedFields = customFields;
+      let importedGroups = groups;
 
       if (Array.isArray(data)) {
         importedFriends = data;
@@ -614,6 +696,9 @@ export default function App() {
         importedFriends = data.friends;
         if (data.customFields && Array.isArray(data.customFields)) {
           importedFields = data.customFields;
+        }
+        if (data.groups && Array.isArray(data.groups)) {
+          importedGroups = data.groups;
         }
       } else {
         throw new Error("格式錯誤");
@@ -626,12 +711,14 @@ export default function App() {
           Date.now().toString() + Math.random().toString(36).substr(2, 5),
         name: f.name || "未命名球友",
         positions: Array.isArray(f.positions) ? f.positions : [],
+        groupIds: Array.isArray(f.groupIds) ? f.groupIds : [],
         attributes: f.attributes || {},
       }));
 
-      await updateCloudData(importedFriends, importedFields);
+      await updateCloudData(importedFriends, importedFields, importedGroups);
       setFriends(importedFriends);
       setCustomFields(importedFields);
+      setGroups(importedGroups);
       showToast("JSON 檔案匯入成功！已覆蓋資料", "success");
     } catch (e) {
       showToast("檔案讀取失敗，請確認是否為有效的 JSON 格式", "error");
@@ -654,6 +741,7 @@ export default function App() {
     id: null,
     name: "",
     positions: [],
+    groupIds: [],
     attributes: {},
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -661,26 +749,16 @@ export default function App() {
   // ====== 篩選與排序 ======
   const [filterName, setFilterName] = useState("");
   const [filterPositions, setFilterPositions] = useState([]);
+  const [filterGroups, setFilterGroups] = useState([]);
   const [filterValues, setFilterValues] = useState({});
   const [sortBy, setSortBy] = useState("skill");
 
   // 計算是否啟用篩選
   const activeFiltersCount =
     filterPositions.length +
+    filterGroups.length +
     Object.keys(filterValues).length +
     (sortBy !== "skill" && sortBy !== "" ? 1 : 0);
-
-  // ====== 欄位設定 ======
-  const [editingFieldId, setEditingFieldId] = useState(null);
-  const [newFieldName, setNewFieldName] = useState("");
-  const [newFieldType, setNewFieldType] = useState("rating");
-  const [newFieldOptions, setNewFieldOptions] = useState("");
-  const [isMultiChoice, setIsMultiChoice] = useState(false);
-
-  // ====== 導覽列拖曳 ======
-  const [navPos, setNavPos] = useState({ x: 0, y: 0 });
-  const [isDraggingNav, setIsDraggingNav] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // ====== 互動處理邏輯 ======
   const handleSaveFriend = async (e, isModal = false) => {
@@ -703,7 +781,7 @@ export default function App() {
       setActiveTab("list");
     }
     showToast(formData.id ? "資料修改成功！" : "新增球友成功！", "success");
-    await updateCloudData(newFriends, customFields);
+    await updateCloudData(newFriends, customFields, groups);
   };
 
   const handleDeleteFriend = async (id) => {
@@ -713,16 +791,87 @@ export default function App() {
     setSelectedFriend(null);
     setIsEditModalOpen(false);
     showToast("已刪除該球友", "success");
-    await updateCloudData(newFriends, customFields);
+    await updateCloudData(newFriends, customFields, groups);
   };
 
+  // ----- 群組 CRUD -----
+  const handleSaveGroup = async (e) => {
+    if (e) e.preventDefault();
+    if (!newGroupName.trim()) return;
+
+    const newId = editingGroupId || Date.now().toString();
+    const groupData = {
+      id: newId,
+      name: newGroupName.trim().substring(0, 6),
+      color: newGroupColor,
+    };
+
+    let newGroups;
+    if (editingGroupId) {
+      newGroups = groups.map((g) => (g.id === editingGroupId ? groupData : g));
+    } else {
+      newGroups = [...groups, groupData];
+    }
+
+    // 自動為當前正在編輯的球員勾選這個新標籤 (若不超過上限)
+    if (!editingGroupId) {
+      const currentIds = formData.groupIds || [];
+      if (currentIds.length >= 2) {
+        showToast("群組新增成功！(已達 2 個上限，未自動套用)", "warning");
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          groupIds: [...currentIds, newId],
+        }));
+        showToast("群組新增成功！", "success");
+      }
+    } else {
+      showToast("群組更新成功！", "success");
+    }
+
+    setGroups(newGroups);
+    setEditingGroupId(null);
+    setNewGroupName("");
+    setNewGroupColor("gray");
+    await updateCloudData(friends, customFields, newGroups);
+  };
+
+  const handleDeleteGroup = async (groupId) => {
+    const newGroups = groups.filter((g) => g.id !== groupId);
+    // Remove group from all friends
+    const newFriends = friends.map((f) => {
+      if (f.groupIds && f.groupIds.includes(groupId)) {
+        return { ...f, groupIds: f.groupIds.filter((id) => id !== groupId) };
+      }
+      return f;
+    });
+
+    // 移除當前表單中被刪除的標籤
+    if (formData.groupIds?.includes(groupId)) {
+      setFormData((prev) => ({
+        ...prev,
+        groupIds: prev.groupIds.filter((id) => id !== groupId),
+      }));
+    }
+
+    // 移除篩選條件中被刪除的標籤
+    if (filterGroups.includes(groupId)) {
+      setFilterGroups((prev) => prev.filter((id) => id !== groupId));
+    }
+
+    setGroups(newGroups);
+    setFriends(newFriends);
+    showToast("群組已刪除", "success");
+    await updateCloudData(newFriends, customFields, newGroups);
+  };
+
+  // ----- 欄位 CRUD -----
   const handleEditField = (field) => {
     setEditingFieldId(field.id);
     setNewFieldName(field.name);
     setNewFieldType(field.type);
     setNewFieldOptions(field.options ? field.options.join(", ") : "");
     setIsMultiChoice(field.isMulti || false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelEditField = () => {
@@ -768,7 +917,7 @@ export default function App() {
     setCustomFields(newFields);
     cancelEditField();
     showToast(editingFieldId ? "欄位更新成功！" : "欄位新增成功！", "success");
-    await updateCloudData(friends, newFields);
+    await updateCloudData(friends, newFields, groups);
   };
 
   const handleDeleteField = async (fieldId) => {
@@ -782,7 +931,7 @@ export default function App() {
     setCustomFields(newFields);
     setFriends(newFriends);
     showToast("欄位已刪除", "success");
-    await updateCloudData(newFriends, newFields);
+    await updateCloudData(newFriends, newFields, groups);
   };
 
   const [draggedIdx, setDraggedIdx] = useState(null);
@@ -811,7 +960,7 @@ export default function App() {
     setCustomFields(newFields);
     setDraggedIdx(null);
     setDragOverIdx(null);
-    await updateCloudData(friends, newFields);
+    await updateCloudData(friends, newFields, groups);
   };
   const handleDragEnd = () => {
     setDraggedIdx(null);
@@ -833,7 +982,7 @@ export default function App() {
     }
     const newFields = [...newEditable, noteField].filter(Boolean);
     setCustomFields(newFields);
-    await updateCloudData(friends, newFields);
+    await updateCloudData(friends, newFields, groups);
   };
 
   const handleNavMouseDown = (e) => {
@@ -874,8 +1023,13 @@ export default function App() {
       id: null,
       name: "",
       positions: [],
+      groupIds: [],
       attributes: initialAttributes,
     });
+    setIsAddingGroup(false);
+    setIsManagingGroups(false);
+    setEditingGroupId(null);
+    setNewGroupName("");
     setIsEditModalOpen(false);
     setActiveTab("form");
   };
@@ -891,8 +1045,13 @@ export default function App() {
       id: friend.id,
       name: friend.name,
       positions: [...friend.positions],
+      groupIds: friend.groupIds ? [...friend.groupIds] : [],
       attributes: initialAttributes,
     });
+    setIsAddingGroup(false);
+    setIsManagingGroups(false);
+    setEditingGroupId(null);
+    setNewGroupName("");
     setSelectedFriend(null);
     setIsEditModalOpen(true);
   };
@@ -903,7 +1062,7 @@ export default function App() {
     else onChange([...currentList, pos]);
   };
 
-  const getContactLink = (contact) => {
+  const getContactWebLink = (contact) => {
     if (!contact || !contact.id) return "#";
     const id = contact.id.trim();
     switch (contact.platform) {
@@ -920,6 +1079,70 @@ export default function App() {
     }
   };
 
+  const handleContactClick = (e, contact) => {
+    if (!contact || !contact.id || contact.platform === "phone") return;
+
+    // 判斷是否為行動裝置
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) return; // 桌面端維持預設 _blank 網頁跳轉行為
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const id = contact.id.trim();
+    const webUrl = getContactWebLink(contact);
+    let appUrl = "";
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+      // Android 使用 Intent URI 機制，由系統原生處理跳轉與 Fallback，不會殘留空分頁
+      const fallbackStr = `;S.browser_fallback_url=${encodeURIComponent(webUrl)}`;
+      if (contact.platform === "ig") {
+        appUrl = `intent://instagram.com/_u/${id}/#Intent;package=com.instagram.android;scheme=https${fallbackStr};end`;
+      } else if (contact.platform === "fb") {
+        appUrl = `intent://profile/${id}#Intent;package=com.facebook.katana;scheme=fb${fallbackStr};end`;
+      } else if (contact.platform === "line") {
+        appUrl = `intent://ti/p/~${id}#Intent;package=jp.naver.line.android;scheme=line${fallbackStr};end`;
+      }
+      if (appUrl) window.location.href = appUrl;
+      return;
+    }
+
+    // iOS 使用 Custom Scheme
+    switch (contact.platform) {
+      case "ig":
+        appUrl = `instagram://user?username=${id}`;
+        break;
+      case "fb":
+        appUrl = `fb://profile/${id}`;
+        break;
+      case "line":
+        appUrl = `line://ti/p/~${id}`;
+        break;
+      default:
+        return;
+    }
+
+    let timer;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 網頁進入背景（成功開啟 APP 或系統提示對話框時），清除計時器
+        clearTimeout(timer);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    window.location.href = appUrl;
+
+    // 若 2 秒後網頁仍在前景，表示未安裝 APP 或跳轉失敗，則同頁面跳轉至網頁版
+    timer = setTimeout(() => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (!document.hidden) {
+        window.location.href = webUrl;
+      }
+    }, 2000);
+  };
+
   const filteredFriends = useMemo(() => {
     let result = friends.filter((friend) => {
       if (
@@ -932,6 +1155,13 @@ export default function App() {
           filterPositions.includes(pos),
         );
         if (!hasMatchingPosition) return false;
+      }
+      if (filterGroups.length > 0) {
+        const friendGroups = friend.groupIds || [];
+        const hasMatchingGroup = friendGroups.some((gid) =>
+          filterGroups.includes(gid),
+        );
+        if (!hasMatchingGroup) return false;
       }
       for (const field of customFields) {
         const fVal = filterValues[field.id];
@@ -983,6 +1213,7 @@ export default function App() {
     friends,
     filterName,
     filterPositions,
+    filterGroups,
     filterValues,
     sortBy,
     customFields,
@@ -1169,33 +1400,21 @@ export default function App() {
       : "bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-[0_10px_40px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 group cursor-pointer";
 
     const innerClass = isRainbow
-      ? "bg-white p-[17px] rounded-[calc(1.5rem-3px)] h-full w-full"
-      : "h-full w-full";
+      ? "bg-white p-[17px] rounded-[calc(1.5rem-3px)] h-full w-full flex flex-col"
+      : "h-full w-full flex flex-col";
 
     return (
       <div onClick={() => setSelectedFriend(friend)} className={outerClass}>
         <div className={innerClass}>
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <h3 className="font-bold text-xl text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors">
-                {friend.name}
-              </h3>
-              <div className="flex gap-1.5 flex-wrap mt-2">
-                {friend.positions.map((p) => (
-                  <span
-                    key={p}
-                    className={`text-xs px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm ${
-                      p === posKey
-                        ? "bg-emerald-500 text-white"
-                        : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {p}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+          {/* 第一排：姓名與操作按鈕 (獨立容器) */}
+          <div className="flex justify-between items-start w-full">
+            <h3 className="font-bold text-xl text-slate-800 tracking-tight group-hover:text-emerald-600 transition-colors truncate flex-1 min-w-0 pr-2">
+              {friend.name}
+            </h3>
+            <div
+              className="flex gap-2 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
               {confirmDeleteId === friend.id ? (
                 <div className="flex items-center gap-2 bg-red-50/80 p-1.5 rounded-xl border border-red-100 animate-fade-in">
                   <button
@@ -1230,8 +1449,37 @@ export default function App() {
             </div>
           </div>
 
-          {/* 精簡資訊區塊 */}
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-50 text-sm w-full overflow-hidden">
+          {/* 第二排：位置與群組標籤 (獨立容器、滿寬、不換行、尾部漸層遮罩) */}
+          <div className="flex gap-1.5 flex-nowrap items-center mt-3 w-full overflow-hidden mask-fade-right pb-1 relative">
+            {friend.positions.map((p) => (
+              <span
+                key={p}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-md font-bold transition-colors shadow-sm ${
+                  p === posKey
+                    ? "bg-emerald-500 text-white"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {p}
+              </span>
+            ))}
+            {friend.groupIds?.map((gid) => {
+              const g = groups.find((x) => x.id === gid);
+              if (!g) return null;
+              const colors = GROUP_COLORS[g.color] || GROUP_COLORS.gray;
+              return (
+                <span
+                  key={gid}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-md font-bold border shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                >
+                  {g.name}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* 第三排：精簡資訊區塊 */}
+          <div className="flex items-center gap-3 mt-auto pt-4 border-t border-slate-50 text-sm w-full overflow-hidden">
             {genderVal && (
               <div className="text-slate-600 flex items-center gap-1 shrink-0">
                 <User size={14} className="text-slate-400 shrink-0" />
@@ -1250,7 +1498,8 @@ export default function App() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <a
-                  href={getContactLink(contactVal)}
+                  href={getContactWebLink(contactVal)}
+                  onClick={(e) => handleContactClick(e, contactVal)}
                   target="_blank"
                   rel="noreferrer"
                   title={contactVal.id}
@@ -1273,7 +1522,44 @@ export default function App() {
     );
   };
 
-  // 共用的表單內容 JSX
+  // 修改：升級為現代化 Shimmer (光澤掃過) 風格的 Skeleton 骨架屏卡片
+  const SkeletonCard = () => (
+    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm h-full w-full">
+      <div className="flex flex-col h-full w-full">
+        {/* 第一排：姓名與按鈕 */}
+        <div className="flex justify-between items-start w-full">
+          <div className="h-7 w-1/2 rounded-lg shimmer-bg"></div>
+          <div className="flex gap-2 shrink-0">
+            <div className="h-9 w-9 rounded-full shimmer-bg"></div>
+            <div className="h-9 w-9 rounded-full shimmer-bg"></div>
+          </div>
+        </div>
+
+        {/* 第二排：標籤 (滿寬不換行) */}
+        <div className="flex gap-2 flex-nowrap items-center mt-3 w-full overflow-hidden mask-fade-right pb-1">
+          <div className="h-6 w-12 shrink-0 rounded-md shimmer-bg"></div>
+          <div className="h-6 w-16 shrink-0 rounded-md shimmer-bg"></div>
+          <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
+          <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
+        </div>
+
+        {/* 第三排：精簡資訊 */}
+        <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-50 w-full overflow-hidden">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
+            <div className="h-4 w-10 rounded-md shrink-0 shimmer-bg"></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
+            <div className="h-4 w-12 rounded-md shrink-0 shimmer-bg"></div>
+          </div>
+          <div className="h-8 w-24 rounded-lg ml-auto shimmer-bg"></div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 共用的表單內容 JSX (僅包含欄位區塊，送出按鈕獨立)
   const formFieldsJSX = (
     <>
       <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-md transition-shadow">
@@ -1319,6 +1605,173 @@ export default function App() {
               <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block"></span>
               請至少選擇一個位置
             </p>
+          )}
+        </div>
+
+        {/* 群組標籤管理與選擇 */}
+        <div className="mt-8 pt-6 border-t border-slate-100">
+          <div className="flex justify-between items-center mb-3">
+            <label className="block font-bold text-slate-700">
+              所屬群組標籤{" "}
+              <span className="text-emerald-500 text-sm ml-1 font-medium">
+                (最多 2 個)
+              </span>
+            </label>
+            {groups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManagingGroups(!isManagingGroups);
+                  if (isAddingGroup) setIsAddingGroup(false);
+                }}
+                className={`text-sm font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isManagingGroups
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <Settings size={14} />{" "}
+                {isManagingGroups ? "完成管理" : "管理標籤"}
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2.5">
+            {groups.map((g) => {
+              const isActive = formData.groupIds?.includes(g.id);
+              const colors = GROUP_COLORS[g.color] || GROUP_COLORS.gray;
+              return (
+                <div key={g.id} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isManagingGroups) {
+                        setEditingGroupId(g.id);
+                        setNewGroupName(g.name);
+                        setNewGroupColor(g.color);
+                        setIsAddingGroup(true);
+                      } else {
+                        const currentIds = formData.groupIds || [];
+                        if (
+                          !currentIds.includes(g.id) &&
+                          currentIds.length >= 2
+                        ) {
+                          showToast(
+                            "每人最多只能加入 2 個群組標籤哦！",
+                            "warning",
+                          );
+                          return;
+                        }
+                        togglePosition(g.id, currentIds, (newIds) =>
+                          setFormData({ ...formData, groupIds: newIds }),
+                        );
+                      }
+                    }}
+                    className={`cursor-pointer whitespace-nowrap px-4 py-2 rounded-xl font-bold text-sm transition-all duration-300 border shadow-sm ${
+                      isManagingGroups
+                        ? `${colors.bg} ${colors.text} border-dashed border-${colors.border.split("-")[1] || "slate"}-400 hover:scale-105 pr-8`
+                        : isActive
+                          ? `${colors.bg} ${colors.text} ${colors.border} shadow-md -translate-y-0.5`
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:border-slate-300 active:scale-90"
+                    }`}
+                  >
+                    {g.name}
+                  </button>
+                  {isManagingGroups && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteGroup(g.id);
+                      }}
+                      className="cursor-pointer absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-red-100 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {!isAddingGroup && !isManagingGroups && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingGroupId(null);
+                  setNewGroupName("");
+                  setNewGroupColor("emerald");
+                  setIsAddingGroup(true);
+                }}
+                className="cursor-pointer px-4 py-2 rounded-xl font-bold text-sm text-emerald-600 bg-emerald-50 border border-emerald-200 border-dashed hover:bg-emerald-100 transition-all flex items-center gap-1 active:scale-95"
+              >
+                <Plus size={16} /> 新增標籤
+              </button>
+            )}
+          </div>
+
+          {isAddingGroup && (
+            <div className="w-full bg-slate-50 p-5 rounded-2xl border border-slate-200 mt-4 animate-slide-up shadow-sm">
+              <h4 className="font-bold text-slate-700 mb-3 text-sm flex items-center gap-1.5">
+                {editingGroupId ? <Edit2 size={14} /> : <Plus size={14} />}
+                {editingGroupId ? "編輯標籤" : "新增標籤"}
+              </h4>
+              <div className="flex flex-col gap-4">
+                <input
+                  type="text"
+                  placeholder="輸入標籤名稱 (最多 6 字)"
+                  maxLength={6}
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 outline-none transition-all"
+                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2">
+                    標籤顏色
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {Object.entries(GROUP_COLORS).map(([colorKey, colors]) => (
+                      <button
+                        key={colorKey}
+                        type="button"
+                        onClick={() => setNewGroupColor(colorKey)}
+                        className={`cursor-pointer w-8 h-8 rounded-full ${colors.bg} border-2 ${colors.border} transition-all active:scale-90 flex items-center justify-center ${
+                          newGroupColor === colorKey
+                            ? "ring-4 ring-offset-1 ring-slate-200 scale-110 shadow-sm"
+                            : "hover:scale-105"
+                        }`}
+                      >
+                        {newGroupColor === colorKey && (
+                          <CheckCircle2 size={14} className={colors.text} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end mt-2 pt-4 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingGroup(false);
+                      setEditingGroupId(null);
+                    }}
+                    className="cursor-pointer px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      handleSaveGroup(e);
+                      setIsAddingGroup(false);
+                    }}
+                    disabled={!newGroupName.trim()}
+                    className="cursor-pointer px-6 py-2 text-sm font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-500 transition-all disabled:opacity-50 disabled:active:scale-100 active:scale-95 shadow-sm shadow-emerald-600/20"
+                  >
+                    儲存
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1518,14 +1971,18 @@ export default function App() {
           </div>
         )}
       </div>
-      <button
-        type="submit"
-        disabled={!formData.name.trim() || formData.positions.length === 0}
-        className="cursor-pointer w-full bg-slate-800 text-white font-extrabold text-lg py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
-      >
-        {formData.id ? "儲存修改" : "新增至圖鑑"}
-      </button>
     </>
+  );
+
+  // 共用的表單送出按鈕
+  const FormSubmitButton = ({ isEditing }) => (
+    <button
+      type="submit"
+      disabled={!formData.name.trim() || formData.positions.length === 0}
+      className="cursor-pointer w-full bg-slate-800 text-white font-extrabold text-lg py-4 md:py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
+    >
+      {isEditing ? "儲存修改" : "新增至圖鑑"}
+    </button>
   );
 
   // ====== 載入中畫面 ======
@@ -1545,7 +2002,17 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 relative">
         <div
-          className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] font-bold text-sm flex items-center gap-2 transition-all duration-500 ${toast.show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0 pointer-events-none"} ${toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-500 text-white"}`}
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] font-bold text-sm flex items-center gap-2 transition-all duration-500 ${
+            toast.show
+              ? "translate-y-0 opacity-100"
+              : "-translate-y-10 opacity-0 pointer-events-none"
+          } ${
+            toast.type === "success"
+              ? "bg-emerald-600 text-white"
+              : toast.type === "warning"
+                ? "bg-amber-500 text-white"
+                : "bg-red-500 text-white"
+          }`}
         >
           {toast.type === "success" ? (
             <CheckCircle2 size={18} />
@@ -1700,7 +2167,17 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] font-sans selection:bg-emerald-100 text-slate-800 relative pb-32">
       {/* 全域 Toast 顯示 */}
       <div
-        className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] font-bold text-sm flex items-center gap-2 transition-all duration-500 ${toast.show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0 pointer-events-none"} ${toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-500 text-white"}`}
+        className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] font-bold text-sm flex items-center gap-2 transition-all duration-500 ${
+          toast.show
+            ? "translate-y-0 opacity-100"
+            : "-translate-y-10 opacity-0 pointer-events-none"
+        } ${
+          toast.type === "success"
+            ? "bg-emerald-600 text-white"
+            : toast.type === "warning"
+              ? "bg-amber-500 text-white"
+              : "bg-red-500 text-white"
+        }`}
       >
         {toast.type === "success" ? (
           <CheckCircle2 size={18} />
@@ -1717,15 +2194,17 @@ export default function App() {
           onClick={() => setSelectedFriend(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-slide-up flex flex-col"
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-slide-up overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
-              <div>
-                <h2 className="text-2xl font-extrabold text-slate-800">
+            {/* Header: 固定在頂部 */}
+            <div className="shrink-0 bg-white/90 backdrop-blur-md px-6 py-5 border-b border-slate-100 flex justify-between items-start z-10">
+              <div className="min-w-0 pr-4">
+                <h2 className="text-2xl font-extrabold text-slate-800 break-words">
                   {selectedFriend.name}
                 </h2>
-                <div className="flex gap-1.5 flex-wrap mt-2">
+                {/* Modal 內的標籤可自由折行 */}
+                <div className="flex gap-1.5 flex-wrap items-center mt-2 w-full">
                   {selectedFriend.positions.map((p) => (
                     <span
                       key={p}
@@ -1734,17 +2213,31 @@ export default function App() {
                       {p}
                     </span>
                   ))}
+                  {selectedFriend.groupIds?.map((gid) => {
+                    const g = groups.find((x) => x.id === gid);
+                    if (!g) return null;
+                    const colors = GROUP_COLORS[g.color] || GROUP_COLORS.gray;
+                    return (
+                      <span
+                        key={gid}
+                        className={`text-xs px-2.5 py-1 rounded-md font-bold border shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                      >
+                        {g.name}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
               <button
                 onClick={() => setSelectedFriend(null)}
-                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors active:scale-95 cursor-pointer"
+                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors active:scale-95 cursor-pointer shrink-0 mt-1"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            {/* Content: 滾動區域 */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-white">
               {customFields.map((field) => {
                 const rawVal = selectedFriend.attributes[field.id];
                 const isEmpty =
@@ -1774,7 +2267,8 @@ export default function App() {
                           "未填寫"
                         ) : (
                           <a
-                            href={getContactLink(rawVal)}
+                            href={getContactWebLink(rawVal)}
+                            onClick={(e) => handleContactClick(e, rawVal)}
                             target="_blank"
                             rel="noreferrer"
                             title={rawVal.id}
@@ -1849,16 +2343,17 @@ export default function App() {
               })}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3 mt-auto">
+            {/* Footer: 固定在底部 */}
+            <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 flex gap-3 mt-auto">
               <button
                 onClick={() => openEditForm(selectedFriend)}
-                className="flex-1 cursor-pointer bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 flex justify-center items-center gap-2"
+                className="flex-1 cursor-pointer bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 px-4 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-95 flex justify-center items-center gap-2"
               >
                 <Edit2 size={18} /> 編輯資料
               </button>
               <button
                 onClick={() => handleDeleteFriend(selectedFriend.id)}
-                className="cursor-pointer bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 flex justify-center items-center"
+                className="cursor-pointer bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200 px-4 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-95 flex justify-center items-center"
               >
                 <Trash2 size={18} />
               </button>
@@ -1874,28 +2369,36 @@ export default function App() {
           onClick={() => setIsEditModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slide-up flex flex-col"
+            className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl animate-slide-up overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
+            {/* Header: 固定在頂部 */}
+            <div className="shrink-0 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
               <h2 className="text-xl font-extrabold text-slate-800">
                 編輯球友資料
               </h2>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors"
+                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6">
-              <form
-                onSubmit={(e) => handleSaveFriend(e, true)}
-                className="space-y-6"
-              >
+
+            {/* Content & Footer: 包裝在 form 中確保滾動區域正確 */}
+            <form
+              onSubmit={(e) => handleSaveFriend(e, true)}
+              className="flex flex-col flex-1 overflow-hidden min-h-0"
+            >
+              {/* Content: 滾動區域 */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/30">
                 {formFieldsJSX}
-              </form>
-            </div>
+              </div>
+              {/* Footer: 固定在底部 */}
+              <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 mt-auto">
+                <FormSubmitButton isEditing={true} />
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1907,10 +2410,11 @@ export default function App() {
           onClick={() => setIsFilterModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-xl max-h-[85vh] overflow-y-auto shadow-2xl animate-slide-up flex flex-col"
+            className="bg-white rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl animate-slide-up overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
+            {/* Header: 固定在頂部 */}
+            <div className="shrink-0 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
               <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                 <Filter size={18} className="text-emerald-500" /> 進階篩選與排序
               </h3>
@@ -1922,7 +2426,8 @@ export default function App() {
               </button>
             </div>
 
-            <div className="p-6">
+            {/* Content: 滾動區域 */}
+            <div className="p-6 overflow-y-auto flex-1 bg-white">
               <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 mb-5">
                 <div className="flex items-center gap-3">
                   <label className="font-medium text-slate-500 text-sm flex items-center gap-1.5 whitespace-nowrap">
@@ -1947,6 +2452,35 @@ export default function App() {
                   />
                 </div>
               </div>
+
+              {groups.length > 0 && (
+                <div className="mb-6 border-b border-slate-100 pb-5">
+                  <label className="block font-bold text-slate-700 mb-3 text-sm tracking-wide">
+                    包含群組
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {groups.map((g) => {
+                      const colors = GROUP_COLORS[g.color] || GROUP_COLORS.gray;
+                      const isActive = filterGroups.includes(g.id);
+                      return (
+                        <button
+                          key={g.id}
+                          onClick={() =>
+                            togglePosition(g.id, filterGroups, setFilterGroups)
+                          }
+                          className={`cursor-pointer px-3 py-1.5 rounded-xl font-medium text-xs transition-all duration-300 border shadow-sm active:scale-95 ${
+                            isActive
+                              ? `${colors.bg} ${colors.text} ${colors.border} shadow-md -translate-y-0.5`
+                              : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="mb-6">
                 <label className="block font-bold text-slate-700 mb-3 text-sm tracking-wide">
@@ -2105,10 +2639,12 @@ export default function App() {
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center mt-auto">
+            {/* Footer: 固定在底部 */}
+            <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center mt-auto">
               <button
                 onClick={() => {
                   setFilterPositions([]);
+                  setFilterGroups([]);
                   setFilterValues({});
                   setSortBy("skill");
                 }}
@@ -2225,6 +2761,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setFilterPositions([]);
+                        setFilterGroups([]);
                         setFilterValues({});
                         setSortBy("skill");
                       }}
@@ -2238,7 +2775,25 @@ export default function App() {
               </div>
 
               <div className="space-y-12">
-                {filteredFriends.length === 0 ? (
+                {isSyncing ? (
+                  // 當正在取得雲端資料時，顯示光澤骨架屏排版
+                  POSITIONS.slice(0, 2).map((pos) => (
+                    <div key={`skeleton-section-${pos}`}>
+                      <div className="flex items-center justify-between mb-5 px-1">
+                        <h3 className="flex items-center gap-3">
+                          <span className="w-1.5 h-7 bg-emerald-100/50 rounded-full inline-block"></span>
+                          <div className="h-8 w-24 rounded-lg shimmer-bg"></div>
+                        </h3>
+                        <div className="h-6 w-16 rounded-full shimmer-bg"></div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+                        <SkeletonCard />
+                        <SkeletonCard />
+                        <SkeletonCard />
+                      </div>
+                    </div>
+                  ))
+                ) : filteredFriends.length === 0 ? (
                   <div className="text-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200 shadow-sm">
                     <Users size={48} className="mx-auto mb-4 text-slate-300" />
                     <p className="font-medium text-lg">找不到符合條件的球友</p>
@@ -2290,7 +2845,7 @@ export default function App() {
 
           {/* ==================== 新增頁面 ==================== */}
           {activeTab === "form" && (
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-2xl mx-auto pb-10">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-extrabold text-slate-800">
                   新增球友
@@ -2301,269 +2856,280 @@ export default function App() {
                 className="space-y-6"
               >
                 {formFieldsJSX}
+                <FormSubmitButton isEditing={false} />
               </form>
             </div>
           )}
 
-          {/* ==================== 欄位設定與資料匯入頁面 ==================== */}
+          {/* ==================== 欄位與群組設定頁面 ==================== */}
           {activeTab === "fields" && (
             <div className="max-w-2xl mx-auto">
               <h2 className="text-3xl font-extrabold text-slate-800 mb-3">
                 設定與資料管理
               </h2>
               <p className="text-slate-500 mb-8 font-medium">
-                管理你的圖鑑欄位，或匯入朋友的排球圖鑑資料。
+                管理你的圖鑑自訂欄位，群組標籤可直接於新增/編輯球友時管理。
               </p>
 
               <div className="h-px bg-slate-200 w-full mb-10"></div>
 
-              {/* 新增/編輯 項目欄位表單 */}
-              <form
-                onSubmit={handleSaveField}
-                className={`p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border mb-10 transition-all ${
-                  editingFieldId
-                    ? "bg-emerald-50/50 border-emerald-300 ring-4 ring-emerald-50"
-                    : "bg-white border-slate-100 hover:shadow-md"
-                }`}
-              >
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="font-bold text-emerald-600 flex items-center gap-2 text-lg">
-                    <div className="p-1.5 bg-emerald-100 rounded-lg shadow-sm">
-                      {editingFieldId ? (
-                        <Edit2 size={18} />
-                      ) : (
-                        <Plus size={18} />
-                      )}
-                    </div>{" "}
-                    {editingFieldId ? "編輯項目欄位" : "新增項目欄位"}
-                  </h3>
-                  {editingFieldId && (
-                    <button
-                      type="button"
-                      onClick={cancelEditField}
-                      className="text-sm font-bold text-slate-400 hover:text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm active:scale-95 cursor-pointer transition-transform"
-                    >
-                      取消編輯
-                    </button>
-                  )}
-                </div>
+              {/* ------ 自訂欄位管理 ------ */}
+              <div>
+                <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
+                  <List size={22} className="text-emerald-500" />{" "}
+                  自訂評分與欄位管理
+                </h3>
 
-                <div className="flex flex-col gap-4">
-                  <input
-                    type="text"
-                    required
-                    placeholder="輸入欄位名稱 (例如：身高、發球)"
-                    value={newFieldName}
-                    onChange={(e) => setNewFieldName(e.target.value)}
-                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all hover:border-emerald-300 shadow-sm"
-                  />
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    {[
-                      { id: "rating", icon: Star, label: "評分" },
-                      { id: "text", icon: AlignLeft, label: "文字" },
-                      { id: "number", icon: Hash, label: "數字" },
-                      { id: "yesno", icon: HelpCircle, label: "是非" },
-                      { id: "choice", icon: List, label: "選擇" },
-                      { id: "contact", icon: Phone, label: "聯絡" },
-                    ].map((type) => (
+                {/* 新增/編輯 項目欄位表單 */}
+                <form
+                  onSubmit={handleSaveField}
+                  className={`p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border mb-10 transition-all ${
+                    editingFieldId
+                      ? "bg-emerald-50/50 border-emerald-300 ring-4 ring-emerald-50"
+                      : "bg-white border-slate-100 hover:shadow-md"
+                  }`}
+                >
+                  <div className="flex justify-between items-center mb-5">
+                    <h3 className="font-bold text-emerald-600 flex items-center gap-2 text-lg">
+                      <div className="p-1.5 bg-emerald-100 rounded-lg shadow-sm">
+                        {editingFieldId ? (
+                          <Edit2 size={18} />
+                        ) : (
+                          <Plus size={18} />
+                        )}
+                      </div>{" "}
+                      {editingFieldId ? "編輯項目欄位" : "新增項目欄位"}
+                    </h3>
+                    {editingFieldId && (
                       <button
-                        key={type.id}
                         type="button"
-                        onClick={() => setNewFieldType(type.id)}
-                        className={`cursor-pointer whitespace-nowrap py-3 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 transition-all border active:scale-95 ${
-                          newFieldType === type.id
-                            ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5"
-                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
-                        }`}
+                        onClick={cancelEditField}
+                        className="text-sm font-bold text-slate-400 hover:text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm active:scale-95 cursor-pointer transition-transform"
                       >
-                        <type.icon
-                          size={18}
-                          className={
-                            newFieldType === type.id ? "text-emerald-100" : ""
-                          }
-                        />
-                        {type.label}
+                        取消編輯
                       </button>
-                    ))}
+                    )}
                   </div>
 
-                  {newFieldType === "choice" && (
-                    <div className="space-y-4 animate-slide-up">
-                      <input
-                        type="text"
-                        required
-                        placeholder="輸入選項，請用逗號分隔 (例: 男網,女網,混合網)"
-                        value={newFieldOptions}
-                        onChange={(e) => setNewFieldOptions(e.target.value)}
-                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all hover:border-emerald-300 shadow-sm"
-                      />
-                      <label className="flex items-center gap-3 cursor-pointer bg-white border border-slate-200 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
-                        <div className="relative">
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={isMultiChoice}
-                            onChange={(e) => setIsMultiChoice(e.target.checked)}
-                          />
-                          <div
-                            className={`w-11 h-6 rounded-full transition-colors ${isMultiChoice ? "bg-emerald-500" : "bg-slate-200"}`}
-                          ></div>
-                          <div
-                            className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${isMultiChoice ? "translate-x-5" : "translate-x-0"}`}
-                          ></div>
-                        </div>
-                        <div className="font-bold text-slate-700">
-                          允許多選
-                          <div className="text-xs text-slate-400 font-normal mt-0.5">
-                            開啟後，填寫資料時可同時勾選多個選項
-                          </div>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="cursor-pointer w-full mt-2 bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-xl font-bold shadow-[0_4px_15px_rgba(30,41,59,0.3)] transition-all active:scale-[0.98]"
-                  >
-                    {editingFieldId ? "儲存欄位變更" : "加入新欄位"}
-                  </button>
-                </div>
-              </form>
-
-              <div>
-                <h3 className="font-bold text-slate-800 mb-4 text-xl">
-                  目前的欄位順序
-                </h3>
-                <div className="space-y-4">
-                  {editableFields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragEnter={(e) => handleDragEnter(e, index)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, index)}
-                      onDragEnd={handleDragEnd}
-                      className={`flex justify-between items-center bg-white p-4 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md ${
-                        draggedIdx === index
-                          ? "opacity-40 border-emerald-500 scale-[0.98]"
-                          : dragOverIdx === index
-                            ? "border-emerald-500 border-dashed bg-emerald-50 scale-[1.02]"
-                            : "border-slate-200 hover:border-emerald-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-emerald-500 py-2 transition-colors">
-                          <GripVertical size={20} />
-                        </div>
-                        <div
-                          className={`p-3 rounded-xl shadow-sm ${
-                            field.type === "rating"
-                              ? "bg-amber-100 text-amber-600"
-                              : field.type === "text"
-                                ? "bg-blue-100 text-blue-600"
-                                : field.type === "yesno"
-                                  ? "bg-emerald-100 text-emerald-600"
-                                  : field.type === "number"
-                                    ? "bg-rose-100 text-rose-600"
-                                    : field.type === "contact"
-                                      ? "bg-indigo-100 text-indigo-600"
-                                      : "bg-purple-100 text-purple-600"
+                  <div className="flex flex-col gap-4">
+                    <input
+                      type="text"
+                      required
+                      placeholder="輸入欄位名稱 (例如：身高、發球)"
+                      value={newFieldName}
+                      onChange={(e) => setNewFieldName(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all hover:border-emerald-300 shadow-sm"
+                    />
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {[
+                        { id: "rating", icon: Star, label: "評分" },
+                        { id: "text", icon: AlignLeft, label: "文字" },
+                        { id: "number", icon: Hash, label: "數字" },
+                        { id: "yesno", icon: HelpCircle, label: "是非" },
+                        { id: "choice", icon: List, label: "選擇" },
+                        { id: "contact", icon: Phone, label: "聯絡" },
+                      ].map((type) => (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => setNewFieldType(type.id)}
+                          className={`cursor-pointer whitespace-nowrap py-3 rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 transition-all border active:scale-95 ${
+                            newFieldType === type.id
+                              ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20 -translate-y-0.5"
+                              : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                           }`}
                         >
-                          {field.type === "rating" ? (
-                            <Star size={20} />
-                          ) : field.type === "text" ? (
-                            <AlignLeft size={20} />
-                          ) : field.type === "yesno" ? (
-                            <HelpCircle size={20} />
-                          ) : field.type === "number" ? (
-                            <Hash size={20} />
-                          ) : field.type === "contact" ? (
-                            <Phone size={20} />
-                          ) : field.isMulti ? (
-                            <CheckSquare size={20} />
-                          ) : (
-                            <List size={20} />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800 text-lg">
-                            {field.name}
-                          </div>
-                          <div className="text-xs font-medium text-slate-400 mt-0.5">
-                            {field.type === "rating"
-                              ? "1-5 評分"
-                              : field.type === "text"
-                                ? "自由文字"
-                                : field.type === "number"
-                                  ? "數字輸入"
-                                  : field.type === "contact"
-                                    ? "聯絡方式"
-                                    : field.type === "yesno"
-                                      ? "是非題"
-                                      : `選擇題 (${field.options?.join(", ")}) ${field.isMulti ? "[可複選]" : ""}`}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="hidden md:flex flex-col gap-1 mr-2">
-                          <button
-                            type="button"
-                            onClick={() => moveField(index, "up")}
-                            disabled={index === 0}
-                            className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
-                          >
-                            <ArrowUp size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveField(index, "down")}
-                            disabled={index === editableFields.length - 1}
-                            className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
-                          >
-                            <ArrowDown size={16} />
-                          </button>
-                        </div>
-                        <div className="h-8 w-px bg-slate-100 mx-1 hidden md:block"></div>
-                        <button
-                          onClick={() => handleEditField(field)}
-                          className="cursor-pointer p-2.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
-                        >
-                          <Edit2 size={20} />
+                          <type.icon
+                            size={18}
+                            className={
+                              newFieldType === type.id ? "text-emerald-100" : ""
+                            }
+                          />
+                          {type.label}
                         </button>
-                        <button
-                          onClick={() => handleDeleteField(field.id)}
-                          className="cursor-pointer p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
 
-                  {noteField && (
-                    <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200 opacity-80 cursor-not-allowed">
-                      <div className="flex items-center gap-4">
-                        <div className="w-6 mx-2"></div>
-                        <div className="p-3 rounded-xl shadow-sm bg-slate-200 text-slate-500">
-                          <AlignLeft size={20} />
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-600 text-lg flex items-center gap-2">
-                            {noteField.name}{" "}
-                            <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full">
-                              已鎖定
-                            </span>
+                    {newFieldType === "choice" && (
+                      <div className="space-y-4 animate-slide-up">
+                        <input
+                          type="text"
+                          required
+                          placeholder="輸入選項，請用逗號分隔 (例: 男網,女網,混合網)"
+                          value={newFieldOptions}
+                          onChange={(e) => setNewFieldOptions(e.target.value)}
+                          className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 text-slate-800 transition-all hover:border-emerald-300 shadow-sm"
+                        />
+                        <label className="flex items-center gap-3 cursor-pointer bg-white border border-slate-200 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={isMultiChoice}
+                              onChange={(e) =>
+                                setIsMultiChoice(e.target.checked)
+                              }
+                            />
+                            <div
+                              className={`w-11 h-6 rounded-full transition-colors ${isMultiChoice ? "bg-emerald-500" : "bg-slate-200"}`}
+                            ></div>
+                            <div
+                              className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm ${isMultiChoice ? "translate-x-5" : "translate-x-0"}`}
+                            ></div>
                           </div>
-                          <div className="text-xs font-medium text-slate-400 mt-0.5">
-                            系統預設固定於最下方
+                          <div className="font-bold text-slate-700">
+                            允許多選
+                            <div className="text-xs text-slate-400 font-normal mt-0.5">
+                              開啟後，填寫資料時可同時勾選多個選項
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="cursor-pointer w-full mt-2 bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-xl font-bold shadow-[0_4px_15px_rgba(30,41,59,0.3)] transition-all active:scale-[0.98]"
+                    >
+                      {editingFieldId ? "儲存欄位變更" : "加入新欄位"}
+                    </button>
+                  </div>
+                </form>
+
+                <div>
+                  <h4 className="font-bold text-slate-800 mb-4 text-md">
+                    目前的欄位順序
+                  </h4>
+                  <div className="space-y-4">
+                    {editableFields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragEnter={(e) => handleDragEnter(e, index)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        className={`flex justify-between items-center bg-white p-4 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md ${
+                          draggedIdx === index
+                            ? "opacity-40 border-emerald-500 scale-[0.98]"
+                            : dragOverIdx === index
+                              ? "border-emerald-500 border-dashed bg-emerald-50 scale-[1.02]"
+                              : "border-slate-200 hover:border-emerald-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-emerald-500 py-2 transition-colors">
+                            <GripVertical size={20} />
+                          </div>
+                          <div
+                            className={`p-3 rounded-xl shadow-sm ${
+                              field.type === "rating"
+                                ? "bg-amber-100 text-amber-600"
+                                : field.type === "text"
+                                  ? "bg-blue-100 text-blue-600"
+                                  : field.type === "yesno"
+                                    ? "bg-emerald-100 text-emerald-600"
+                                    : field.type === "number"
+                                      ? "bg-rose-100 text-rose-600"
+                                      : field.type === "contact"
+                                        ? "bg-indigo-100 text-indigo-600"
+                                        : "bg-purple-100 text-purple-600"
+                            }`}
+                          >
+                            {field.type === "rating" ? (
+                              <Star size={20} />
+                            ) : field.type === "text" ? (
+                              <AlignLeft size={20} />
+                            ) : field.type === "yesno" ? (
+                              <HelpCircle size={20} />
+                            ) : field.type === "number" ? (
+                              <Hash size={20} />
+                            ) : field.type === "contact" ? (
+                              <Phone size={20} />
+                            ) : field.isMulti ? (
+                              <CheckSquare size={20} />
+                            ) : (
+                              <List size={20} />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-800 text-lg">
+                              {field.name}
+                            </div>
+                            <div className="text-xs font-medium text-slate-400 mt-0.5">
+                              {field.type === "rating"
+                                ? "1-5 評分"
+                                : field.type === "text"
+                                  ? "自由文字"
+                                  : field.type === "number"
+                                    ? "數字輸入"
+                                    : field.type === "contact"
+                                      ? "聯絡方式"
+                                      : field.type === "yesno"
+                                        ? "是非題"
+                                        : `選擇題 (${field.options?.join(", ")}) ${field.isMulti ? "[可複選]" : ""}`}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="hidden md:flex flex-col gap-1 mr-2">
+                            <button
+                              type="button"
+                              onClick={() => moveField(index, "up")}
+                              disabled={index === 0}
+                              className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
+                            >
+                              <ArrowUp size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveField(index, "down")}
+                              disabled={index === editableFields.length - 1}
+                              className="cursor-pointer p-1 text-slate-400 hover:text-emerald-600 disabled:opacity-20 transition-colors active:scale-90"
+                            >
+                              <ArrowDown size={16} />
+                            </button>
+                          </div>
+                          <div className="h-8 w-px bg-slate-100 mx-1 hidden md:block"></div>
+                          <button
+                            onClick={() => handleEditField(field)}
+                            className="cursor-pointer p-2.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                          >
+                            <Edit2 size={20} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteField(field.id)}
+                            className="cursor-pointer p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {noteField && (
+                      <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200 opacity-80 cursor-not-allowed">
+                        <div className="flex items-center gap-4">
+                          <div className="w-6 mx-2"></div>
+                          <div className="p-3 rounded-xl shadow-sm bg-slate-200 text-slate-500">
+                            <AlignLeft size={20} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-600 text-lg flex items-center gap-2">
+                              {noteField.name}{" "}
+                              <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full">
+                                已鎖定
+                              </span>
+                            </div>
+                            <div className="text-xs font-medium text-slate-400 mt-0.5">
+                              系統預設固定於最下方
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2910,6 +3476,32 @@ export default function App() {
         }
         input[type=number] {
           -moz-appearance: textfield;
+        }
+
+        /* 漸層遮罩 (讓過長的標籤優雅淡出) */
+        .mask-fade-right {
+          -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+          mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        }
+        
+        /* 隱藏水平卷軸但保持滑動 */
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+
+        /* 現代化骨架屏光澤動畫 (Shimmer Effect) */
+        .shimmer-bg {
+          background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite linear;
+        }
+        @keyframes shimmer {
+          from { background-position: -200% 0; }
+          to { background-position: 200% 0; }
         }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
