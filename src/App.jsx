@@ -74,10 +74,12 @@ const fallbackConfig = {
 };
 
 const firebaseConfig =
-  typeof __firebase_config !== "undefined"
-    ? JSON.parse(__firebase_config)
+  typeof globalThis.__firebase_config !== "undefined"
+    ? JSON.parse(globalThis.__firebase_config)
     : fallbackConfig;
-const appId = typeof __app_id !== "undefined" ? __app_id : "volley-friends";
+const appId = typeof globalThis.__app_id !== "undefined"
+    ? globalThis.__app_id
+    : "volley-friends";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -157,6 +159,222 @@ const INITIAL_CUSTOM_FIELDS = [
   { id: "note", name: "備註", type: "text" },
 ];
 
+// ====== 專屬客製化下拉選單 (通用) ======
+const CustomSelect = ({
+  value,
+  onChange,
+  options,
+  className = "",
+  innerClassName = "",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const current = options.find((o) => o.value === value) || options[0];
+
+  return (
+    <div className={`relative ${className}`}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full h-full border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-2 ${innerClassName || "bg-white"}`}
+      >
+        <span className="truncate">{current ? current.label : "請選擇"}</span>
+        <ChevronDown
+          size={16}
+          className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[50]"
+            onClick={() => setIsOpen(false)}
+          ></div>
+          <div className="absolute top-full left-0 mt-2 w-full min-w-[120px] bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
+            {options.map((opt) => (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className="flex items-center px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0 text-sm font-medium text-slate-700"
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ====== 專屬客製化下拉選單 (聯絡方式) ======
+const ContactSelect = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const platforms = [
+    { id: "ig", label: "Instagram", prefix: "instagram" },
+    { id: "fb", label: "Facebook", prefix: "facebook" },
+    { id: "line", label: "LINE", prefix: "line" },
+    { id: "phone", label: "手機號碼", prefix: "phone" },
+  ];
+  const current = platforms.find((p) => p.id === value) || platforms[0];
+
+  return (
+    <div className="relative shrink-0 w-[72px] sm:w-[150px]">
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full h-full bg-white border border-slate-200 rounded-2xl px-2 sm:px-4 py-3.5 text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-1 sm:gap-2"
+      >
+        <div className="flex items-center gap-2 overflow-hidden mx-auto sm:mx-0">
+          <div
+            className={`w-6 h-6 flex items-center justify-center shrink-0`}
+          >
+            <img
+              src={`src/assets/icons/${current.prefix}-p.svg`}
+              alt={current.label}
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <span className="hidden sm:block text-sm font-bold truncate">
+            {current.label}
+          </span>
+        </div>
+        <ChevronDown
+          size={16}
+          className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </div>
+
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[50]"
+            onClick={() => setIsOpen(false)}
+          ></div>
+          <div className="absolute top-full left-0 mt-2 w-40 sm:w-48 bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
+            {platforms.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => {
+                  onChange(p.id);
+                  setIsOpen(false);
+                }}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0"
+              >
+                <div
+                  className={`w-6 h-6 flex items-center justify-center shrink-0`}
+                >
+                  <img
+                    src={`src/assets/icons/${p.prefix}-p.svg`}
+                    alt={p.label}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <span className="font-bold text-slate-700 text-sm">
+                  {p.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ====== UI 元件 ======
+const RatingInput = ({ label, value, onChange }) => (
+  <div className="mb-5 animate-slide-up">
+    <div className="flex justify-between items-center mb-3">
+      <label className="font-semibold text-slate-700 flex items-center gap-2">
+        <Star size={16} className="text-emerald-500" /> {label}
+      </label>
+      <span
+        className={`text-sm font-bold px-3 py-1 rounded-full shadow-sm transition-colors ${value ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-100"}`}
+      >
+        {value ? `Lv. ${value}` : "未評分"}
+      </span>
+    </div>
+    <div className="flex justify-between gap-2">
+      {[1, 2, 3, 4, 5].map((num) => (
+        <button
+          key={num}
+          type="button"
+          onClick={() => onChange(value === num ? null : num)}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform active:scale-90 cursor-pointer ${
+            value === num
+              ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.3)] border border-emerald-500 -translate-y-0.5"
+              : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300"
+          }`}
+        >
+          {num}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+
+// 修改：升級為現代化 Shimmer (光澤掃過) 風格的 Skeleton 骨架屏卡片
+const SkeletonCard = () => (
+  <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm h-full w-full">
+    <div className="flex flex-col h-full w-full">
+      {/* 第一排：姓名與按鈕 */}
+      <div className="flex justify-between items-start w-full">
+        <div className="h-7 w-1/2 rounded-lg shimmer-bg"></div>
+        <div className="flex gap-2 shrink-0">
+          <div className="h-9 w-9 rounded-full shimmer-bg"></div>
+          <div className="h-9 w-9 rounded-full shimmer-bg"></div>
+        </div>
+      </div>
+
+      {/* 第二排：標籤 (滿寬不換行) */}
+      <div className="flex gap-2 flex-nowrap items-center mt-3 w-full overflow-hidden mask-fade-right pb-1">
+        <div className="h-6 w-12 shrink-0 rounded-md shimmer-bg"></div>
+        <div className="h-6 w-16 shrink-0 rounded-md shimmer-bg"></div>
+        <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
+        <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
+      </div>
+
+      {/* 第三排：精簡資訊 */}
+      <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-50 w-full overflow-hidden">
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
+          <div className="h-4 w-10 rounded-md shrink-0 shimmer-bg"></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
+          <div className="h-4 w-12 rounded-md shrink-0 shimmer-bg"></div>
+        </div>
+        <div className="h-8 w-24 rounded-lg ml-auto shimmer-bg"></div>
+      </div>
+    </div>
+  </div>
+);
+
+// 共用的表單送出按鈕
+const FormSubmitButton = ({ isEditing, isDisabled }) => (
+  <button
+    type="submit"
+    disabled={isDisabled}
+    className="cursor-pointer w-full bg-slate-800 text-white font-extrabold text-lg py-4 md:py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
+  >
+    {isEditing ? "儲存修改" : "新增至圖鑑"}
+  </button>
+);
+
+const generateShareCode = () =>
+  Math.random().toString(36).substring(2, 8).toUpperCase();
+
+// 以時間戳記當 id，沿用既有資料的格式
+const createTimestampId = () => Date.now().toString();
+
+// 跳轉外部 App 或網頁；放在元件外，避免 React Compiler 視為修改全域值
+const navigateTo = (url) => {
+  window.location.href = url;
+};
+
 export default function App() {
   // ====== 全域 Toast 系統 ======
   const [toast, setToast] = useState({
@@ -195,11 +413,6 @@ export default function App() {
     newPassword: "",
   });
 
-  useEffect(() => {
-    if (profile) {
-      setProfileForm((prev) => ({ ...prev, nickname: profile.nickname || "" }));
-    }
-  }, [profile]);
 
   // ====== 雲端同步與資料狀態 ======
   const [isSyncing, setIsSyncing] = useState(true);
@@ -253,7 +466,14 @@ export default function App() {
         );
         try {
           const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) setProfile(profileSnap.data());
+          if (profileSnap.exists()) {
+            const profileData = profileSnap.data();
+            setProfile(profileData);
+            setProfileForm((prev) => ({
+              ...prev,
+              nickname: profileData.nickname || "",
+            }));
+          }
         } catch (e) {
           console.error("無法取得個人資料", e);
         }
@@ -281,7 +501,6 @@ export default function App() {
       "roster",
       "data",
     );
-    setIsSyncing(true);
 
     const unsubscribe = onSnapshot(
       docRef,
@@ -419,8 +638,6 @@ export default function App() {
   }, [user]);
 
   // ====== 登入 / 註冊邏輯 ======
-  const generateShareCode = () =>
-    Math.random().toString(36).substring(2, 8).toUpperCase();
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -502,6 +719,7 @@ export default function App() {
       await sendPasswordResetEmail(auth, authForm.email);
       showToast("密碼重設信件已寄出，請前往信箱收信！", "success");
     } catch (err) {
+      console.error("寄送密碼重設信失敗:", err);
       showToast("寄送失敗，請確認信箱是否正確或已經註冊。", "error");
     }
   };
@@ -569,6 +787,7 @@ export default function App() {
         groups: newGroups,
       });
     } catch (e) {
+      console.error("儲存雲端資料失敗:", e);
       showToast("儲存失敗，請檢查網路連線", "error");
     }
   };
@@ -628,6 +847,7 @@ export default function App() {
         setImportConfirm(false);
       }
     } catch (err) {
+      console.error("以分享代碼匯入失敗:", err);
       showToast("匯入失敗，請確認權限或稍後再試。", "error");
       setImportConfirm(false);
     } finally {
@@ -650,6 +870,7 @@ export default function App() {
       }
       showToast("分享代碼已複製！", "success");
     } catch (err) {
+      console.error("複製分享代碼失敗:", err);
       showToast("複製失敗", "error");
     }
   };
@@ -724,6 +945,7 @@ export default function App() {
       setGroups(importedGroups);
       showToast("JSON 檔案匯入成功！已覆蓋資料", "success");
     } catch (e) {
+      console.error("讀取 JSON 檔案失敗:", e);
       showToast("檔案讀取失敗，請確認是否為有效的 JSON 格式", "error");
     }
   };
@@ -748,6 +970,8 @@ export default function App() {
     attributes: {},
     isFavorite: false, // 加入 isFavorite 狀態以便編輯表單能記憶
   });
+  const isFormInvalid =
+    !formData.name.trim() || formData.positions.length === 0;
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // ====== 篩選與排序 ======
@@ -777,7 +1001,7 @@ export default function App() {
         f.id === formData.id ? { ...formData } : f,
       );
     } else {
-      newFriends = [...friends, { ...formData, id: Date.now().toString() }];
+      newFriends = [...friends, { ...formData, id: createTimestampId() }];
     }
     setFriends(newFriends);
 
@@ -814,7 +1038,7 @@ export default function App() {
     if (e) e.preventDefault();
     if (!newGroupName.trim()) return;
 
-    const newId = editingGroupId || Date.now().toString();
+    const newId = editingGroupId || createTimestampId();
     const groupData = {
       id: newId,
       name: newGroupName.trim().substring(0, 6),
@@ -902,7 +1126,7 @@ export default function App() {
     if (!newFieldName.trim()) return;
 
     const newField = {
-      id: editingFieldId || Date.now().toString(),
+      id: editingFieldId || createTimestampId(),
       name: newFieldName.trim(),
       type: newFieldType,
     };
@@ -1121,7 +1345,7 @@ export default function App() {
       } else if (contact.platform === "line") {
         appUrl = `intent://ti/p/~${id}#Intent;package=jp.naver.line.android;scheme=line${fallbackStr};end`;
       }
-      if (appUrl) window.location.href = appUrl;
+      if (appUrl) navigateTo(appUrl);
       return;
     }
 
@@ -1149,13 +1373,13 @@ export default function App() {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    window.location.href = appUrl;
+    navigateTo(appUrl);
 
     // 若 2 秒後網頁仍在前景，表示未安裝 APP 或跳轉失敗，則同頁面跳轉至網頁版
     timer = setTimeout(() => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (!document.hidden) {
-        window.location.href = webUrl;
+        navigateTo(webUrl);
       }
     }, 2000);
   };
@@ -1240,161 +1464,6 @@ export default function App() {
     customFields,
   ]);
 
-  // ====== 專屬客製化下拉選單 (通用) ======
-  const CustomSelect = ({
-    value,
-    onChange,
-    options,
-    className = "",
-    innerClassName = "",
-  }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const current = options.find((o) => o.value === value) || options[0];
-
-    return (
-      <div className={`relative ${className}`}>
-        <div
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-full h-full border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-2 ${innerClassName || "bg-white"}`}
-        >
-          <span className="truncate">{current ? current.label : "請選擇"}</span>
-          <ChevronDown
-            size={16}
-            className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          />
-        </div>
-
-        {isOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-[50]"
-              onClick={() => setIsOpen(false)}
-            ></div>
-            <div className="absolute top-full left-0 mt-2 w-full min-w-[120px] bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
-              {options.map((opt) => (
-                <div
-                  key={opt.value}
-                  onClick={() => {
-                    onChange(opt.value);
-                    setIsOpen(false);
-                  }}
-                  className="flex items-center px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0 text-sm font-medium text-slate-700"
-                >
-                  {opt.label}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  // ====== 專屬客製化下拉選單 (聯絡方式) ======
-  const ContactSelect = ({ value, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const platforms = [
-      { id: "ig", label: "Instagram", prefix: "instagram" },
-      { id: "fb", label: "Facebook", prefix: "facebook" },
-      { id: "line", label: "LINE", prefix: "line" },
-      { id: "phone", label: "手機號碼", prefix: "phone" },
-    ];
-    const current = platforms.find((p) => p.id === value) || platforms[0];
-
-    return (
-      <div className="relative shrink-0 w-[72px] sm:w-[150px]">
-        <div
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-full h-full bg-white border border-slate-200 rounded-2xl px-2 sm:px-4 py-3.5 text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-1 sm:gap-2"
-        >
-          <div className="flex items-center gap-2 overflow-hidden mx-auto sm:mx-0">
-            <div
-              className={`w-6 h-6 flex items-center justify-center shrink-0`}
-            >
-              <img
-                src={`src/assets/icons/${current.prefix}-p.svg`}
-                alt={current.label}
-                className="w-full h-full object-contain"
-              />
-            </div>
-            <span className="hidden sm:block text-sm font-bold truncate">
-              {current.label}
-            </span>
-          </div>
-          <ChevronDown
-            size={16}
-            className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          />
-        </div>
-
-        {isOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-[50]"
-              onClick={() => setIsOpen(false)}
-            ></div>
-            <div className="absolute top-full left-0 mt-2 w-40 sm:w-48 bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
-              {platforms.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => {
-                    onChange(p.id);
-                    setIsOpen(false);
-                  }}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0"
-                >
-                  <div
-                    className={`w-6 h-6 flex items-center justify-center shrink-0`}
-                  >
-                    <img
-                      src={`src/assets/icons/${p.prefix}-p.svg`}
-                      alt={p.label}
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <span className="font-bold text-slate-700 text-sm">
-                    {p.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  // ====== UI 元件 ======
-  const RatingInput = ({ label, value, onChange }) => (
-    <div className="mb-5 animate-slide-up">
-      <div className="flex justify-between items-center mb-3">
-        <label className="font-semibold text-slate-700 flex items-center gap-2">
-          <Star size={16} className="text-emerald-500" /> {label}
-        </label>
-        <span
-          className={`text-sm font-bold px-3 py-1 rounded-full shadow-sm transition-colors ${value ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-100"}`}
-        >
-          {value ? `Lv. ${value}` : "未評分"}
-        </span>
-      </div>
-      <div className="flex justify-between gap-2">
-        {[1, 2, 3, 4, 5].map((num) => (
-          <button
-            key={num}
-            type="button"
-            onClick={() => onChange(value === num ? null : num)}
-            className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 transform active:scale-90 cursor-pointer ${
-              value === num
-                ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.3)] border border-emerald-500 -translate-y-0.5"
-                : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300"
-            }`}
-          >
-            {num}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 
   // 極簡版的卡片
   const FriendCard = ({ friend, posKey }) => {
@@ -1603,43 +1672,6 @@ export default function App() {
       </div>
     );
   };
-
-  // 修改：升級為現代化 Shimmer (光澤掃過) 風格的 Skeleton 骨架屏卡片
-  const SkeletonCard = () => (
-    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm h-full w-full">
-      <div className="flex flex-col h-full w-full">
-        {/* 第一排：姓名與按鈕 */}
-        <div className="flex justify-between items-start w-full">
-          <div className="h-7 w-1/2 rounded-lg shimmer-bg"></div>
-          <div className="flex gap-2 shrink-0">
-            <div className="h-9 w-9 rounded-full shimmer-bg"></div>
-            <div className="h-9 w-9 rounded-full shimmer-bg"></div>
-          </div>
-        </div>
-
-        {/* 第二排：標籤 (滿寬不換行) */}
-        <div className="flex gap-2 flex-nowrap items-center mt-3 w-full overflow-hidden mask-fade-right pb-1">
-          <div className="h-6 w-12 shrink-0 rounded-md shimmer-bg"></div>
-          <div className="h-6 w-16 shrink-0 rounded-md shimmer-bg"></div>
-          <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
-          <div className="h-6 w-14 shrink-0 rounded-md shimmer-bg"></div>
-        </div>
-
-        {/* 第三排：精簡資訊 */}
-        <div className="flex items-center gap-4 mt-auto pt-4 border-t border-slate-50 w-full overflow-hidden">
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
-            <div className="h-4 w-10 rounded-md shrink-0 shimmer-bg"></div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded-full shrink-0 shimmer-bg"></div>
-            <div className="h-4 w-12 rounded-md shrink-0 shimmer-bg"></div>
-          </div>
-          <div className="h-8 w-24 rounded-lg ml-auto shimmer-bg"></div>
-        </div>
-      </div>
-    </div>
-  );
 
   // 共用的表單內容 JSX (僅包含欄位區塊，送出按鈕獨立)
   const formFieldsJSX = (
@@ -2079,16 +2111,6 @@ export default function App() {
     </>
   );
 
-  // 共用的表單送出按鈕
-  const FormSubmitButton = ({ isEditing }) => (
-    <button
-      type="submit"
-      disabled={!formData.name.trim() || formData.positions.length === 0}
-      className="cursor-pointer w-full bg-slate-800 text-white font-extrabold text-lg py-4 md:py-5 rounded-2xl shadow-[0_10px_25px_rgba(30,41,59,0.3)] hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none transition-all duration-300 transform active:scale-[0.98]"
-    >
-      {isEditing ? "儲存修改" : "新增至圖鑑"}
-    </button>
-  );
 
   // ====== 載入中畫面 ======
   if (authLoading) {
@@ -2519,7 +2541,7 @@ export default function App() {
               </div>
               {/* Footer: 固定在底部 */}
               <div className="shrink-0 p-4 md:p-6 bg-slate-50 border-t border-slate-100 mt-auto">
-                <FormSubmitButton isEditing={true} />
+                <FormSubmitButton isEditing={true} isDisabled={isFormInvalid} />
               </div>
             </form>
           </div>
@@ -3005,7 +3027,7 @@ export default function App() {
                 className="space-y-6"
               >
                 {formFieldsJSX}
-                <FormSubmitButton isEditing={false} />
+                <FormSubmitButton isEditing={false} isDisabled={isFormInvalid} />
               </form>
             </div>
           )}
