@@ -42,6 +42,10 @@ import {
   Tags,
   Heart,
 } from "lucide-react";
+import instagramIcon from "./assets/icons/instagram-p.svg";
+import facebookIcon from "./assets/icons/facebook-p.svg";
+import lineIcon from "./assets/icons/line-p.svg";
+import phoneIcon from "./assets/icons/phone-p.svg";
 
 // 引入 Firebase 模組
 import { initializeApp } from "firebase/app";
@@ -119,6 +123,14 @@ const GROUP_COLORS = {
   },
 };
 
+// 用 import 取得圖示網址，build 後才會帶上正確的 base 路徑與雜湊檔名
+const PLATFORM_ICONS = {
+  instagram: instagramIcon,
+  facebook: facebookIcon,
+  line: lineIcon,
+  phone: phoneIcon,
+};
+
 const getIconPrefix = (platformId) => {
   if (platformId === "ig") return "instagram";
   if (platformId === "fb") return "facebook";
@@ -171,17 +183,23 @@ const CustomSelect = ({
   const current = options.find((o) => o.value === value) || options[0];
 
   return (
-    <div className={`relative ${className}`}>
-      <div
+    <div
+      className={`relative ${className}`}
+      onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-full border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-2 ${innerClassName || "bg-white"}`}
+        className={`w-full h-full border border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-2 ${innerClassName || "bg-white"}`}
       >
         <span className="truncate">{current ? current.label : "請選擇"}</span>
         <ChevronDown
           size={16}
           className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
-      </div>
+      </button>
 
       {isOpen && (
         <>
@@ -189,18 +207,21 @@ const CustomSelect = ({
             className="fixed inset-0 z-[50]"
             onClick={() => setIsOpen(false)}
           ></div>
-          <div className="absolute top-full left-0 mt-2 w-full min-w-[120px] bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
+          <div className="absolute top-full left-0 mt-2 w-full min-w-[120px] bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in" role="listbox">
             {options.map((opt) => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected={opt.value === value}
                 key={opt.value}
                 onClick={() => {
                   onChange(opt.value);
                   setIsOpen(false);
                 }}
-                className="flex items-center px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0 text-sm font-medium text-slate-700"
+                className="w-full text-left flex items-center px-4 py-3 hover:bg-emerald-50 focus-visible:bg-emerald-50 outline-none cursor-pointer transition-colors border-b border-slate-50 last:border-0 text-sm font-medium text-slate-700"
               >
                 {opt.label}
-              </div>
+              </button>
             ))}
           </div>
         </>
@@ -221,18 +242,25 @@ const ContactSelect = ({ value, onChange }) => {
   const current = platforms.find((p) => p.id === value) || platforms[0];
 
   return (
-    <div className="relative shrink-0 w-[72px] sm:w-[150px]">
-      <div
+    <div
+      className="relative shrink-0 w-[72px] sm:w-[150px]"
+      onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={`聯絡方式：${current.label}`}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-full bg-white border border-slate-200 rounded-2xl px-2 sm:px-4 py-3.5 text-slate-700 outline-none hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-1 sm:gap-2"
+        className="w-full h-full bg-white border border-slate-200 rounded-2xl px-2 sm:px-4 py-3.5 text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 hover:border-emerald-400 font-medium cursor-pointer flex items-center justify-between transition-all shadow-sm gap-1 sm:gap-2"
       >
         <div className="flex items-center gap-2 overflow-hidden mx-auto sm:mx-0">
           <div
             className={`w-6 h-6 flex items-center justify-center shrink-0`}
           >
             <img
-              src={`src/assets/icons/${current.prefix}-p.svg`}
-              alt={current.label}
+              src={PLATFORM_ICONS[current.prefix]}
+              alt=""
               className="w-full h-full object-contain"
             />
           </div>
@@ -244,7 +272,7 @@ const ContactSelect = ({ value, onChange }) => {
           size={16}
           className={`text-slate-400 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
-      </div>
+      </button>
 
       {isOpen && (
         <>
@@ -252,21 +280,24 @@ const ContactSelect = ({ value, onChange }) => {
             className="fixed inset-0 z-[50]"
             onClick={() => setIsOpen(false)}
           ></div>
-          <div className="absolute top-full left-0 mt-2 w-40 sm:w-48 bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in">
+          <div className="absolute top-full left-0 mt-2 w-40 sm:w-48 bg-white border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden z-[51] animate-fade-in" role="listbox">
             {platforms.map((p) => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected={p.id === value}
                 key={p.id}
                 onClick={() => {
                   onChange(p.id);
                   setIsOpen(false);
                 }}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0"
+                className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 focus-visible:bg-emerald-50 outline-none cursor-pointer transition-colors border-b border-slate-50 last:border-0"
               >
                 <div
                   className={`w-6 h-6 flex items-center justify-center shrink-0`}
                 >
                   <img
-                    src={`src/assets/icons/${p.prefix}-p.svg`}
+                    src={PLATFORM_ICONS[p.prefix]}
                     alt={p.label}
                     className="w-full h-full object-contain"
                   />
@@ -274,7 +305,7 @@ const ContactSelect = ({ value, onChange }) => {
                 <span className="font-bold text-slate-700 text-sm">
                   {p.label}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </>
@@ -374,6 +405,9 @@ const createTimestampId = () => Date.now().toString();
 const navigateTo = (url) => {
   window.location.href = url;
 };
+
+// JSON 匯入檔大小上限，避免誤選大型檔案造成卡頓或寫入失敗
+const MAX_IMPORT_FILE_BYTES = 1024 * 1024;
 
 export default function App() {
   // ====== 全域 Toast 系統 ======
@@ -905,6 +939,10 @@ export default function App() {
       showToast("請選擇 .json 格式的檔案", "error");
       return;
     }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      showToast("檔案太大（上限 1 MB），請確認是否為本站匯出的備份檔", "error");
+      return;
+    }
     try {
       const text = await file.text();
       const data = JSON.parse(text);
@@ -938,6 +976,13 @@ export default function App() {
         attributes: f.attributes || {},
         isFavorite: f.isFavorite || false, // 保留 isFavorite 屬性
       }));
+
+      // 匯入會整筆覆蓋雲端資料，先讓使用者確認，並自動下載目前資料當備份
+      const isConfirmed = window.confirm(
+        `將以檔案中的 ${importedFriends.length} 位球友覆蓋目前的 ${friends.length} 位球友，確定要匯入嗎？${friends.length > 0 ? "\n（會先自動下載一份目前資料的備份）" : ""}`,
+      );
+      if (!isConfirmed) return;
+      if (friends.length > 0) handleExportJson();
 
       await updateCloudData(importedFriends, importedFields, importedGroups);
       setFriends(importedFriends);
@@ -1657,7 +1702,7 @@ export default function App() {
                   }`}
                 >
                   <img
-                    src={`src/assets/icons/${getIconPrefix(contactVal.platform)}-p.svg`}
+                    src={PLATFORM_ICONS[getIconPrefix(contactVal.platform)]}
                     alt={contactVal.platform}
                     className="w-4 h-4 shrink-0 object-contain"
                   />
@@ -2420,7 +2465,7 @@ export default function App() {
                             className="text-emerald-600 hover:text-emerald-500 flex items-center gap-2 bg-emerald-50 border border-emerald-100 shadow-sm px-3 py-2 rounded-xl transition-colors hover:shadow overflow-hidden"
                           >
                             <img
-                              src={`src/assets/icons/${getIconPrefix(rawVal.platform)}-p.svg`}
+                              src={PLATFORM_ICONS[getIconPrefix(rawVal.platform)]}
                               alt={rawVal.platform}
                               className="w-5 h-5 shrink-0 object-contain"
                             />
