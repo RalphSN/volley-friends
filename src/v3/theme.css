@@ -1,0 +1,557 @@
+/*
+ * 球友誌 v3 主題：新野獸派（Neo-Brutalism）。
+ * 色票沿用 course-web-neo-brutalism 的 design-tokens：黑色粗框、零模糊硬陰影、平塗高彩度色塊，
+ * 彩色色塊上一律黑字。只在 .nb 範圍內覆寫 Tailwind v4 變數，原版與 v2 不受影響。
+ */
+.nb {
+  --nb-bg: #fffdf5;
+  --nb-surface: #ffffff;
+  --nb-ink: #0a0a0a;
+  --nb-ink-muted: #454545;
+  --nb-primary: #ffd60a;
+  --nb-accent: #ff7ab6;
+  --nb-danger: #ff6b6b;
+  --nb-info: #5aa9ff;
+  --nb-success: #3ddc84;
+  --nb-highlight: #fff08a;
+  --nb-border: 3px solid var(--nb-ink);
+  --nb-shadow: 4px 4px 0 var(--nb-ink);
+  --nb-shadow-sm: 2px 2px 0 var(--nb-ink);
+
+  /* 五個位置的代表色，黑字對比皆 ≥ 7:1 */
+  --nb-pos-setter: #ffd60a;
+  --nb-pos-outside: #ff8fab;
+  --nb-pos-opposite: #7ce577;
+  --nb-pos-middle: #5aa9ff;
+  --nb-pos-libero: #b9a3ff;
+
+  /*
+   * 色票原則：Tailwind 的色階變數在這裡只負責「底色」。
+   * 每一階都是能配黑字的亮色（黑字對比 ≥ 7:1），所以任何 bg-* 或 hover:bg-* 都不會變成暗底。
+   * 文字色與框線色另外在下方用屬性選擇器統一處理，避免同一個變數同時當暗字與亮底而互相衝突。
+   */
+  --color-emerald-50: #fffbe0;
+  --color-emerald-100: #fff3a8;
+  --color-emerald-200: #ffeb70;
+  --color-emerald-300: #ffe347;
+  --color-emerald-400: #ffdc2e;
+  --color-emerald-500: #ffd60a;
+  --color-emerald-600: #ffcc00;
+  --color-emerald-700: #f5c400;
+  --color-emerald-800: #ebbc00;
+  --color-emerald-900: #e0b400;
+  --color-teal-500: #ffd60a;
+  --color-teal-600: #ffcc00;
+
+  --color-slate-50: #fffdf5;
+  --color-slate-100: #f6f2e4;
+  --color-slate-200: #ece6d0;
+  --color-slate-300: #e2dbc0;
+  --color-slate-400: #d8d0b2;
+  --color-slate-500: #cec5a4;
+  --color-slate-600: #ffd60a;
+  --color-slate-700: #ffd60a;
+  --color-slate-800: #ffd60a;
+  --color-slate-900: #ffcc00;
+
+  --color-red-50: #ffeaea;
+  --color-red-100: #ffd6d6;
+  --color-red-200: #ffc2c2;
+  --color-red-400: #ff8585;
+  --color-red-500: #ff6b6b;
+  --color-red-600: #ff5757;
+  --color-red-800: #ff8585;
+  --color-rose-50: #ffeaf3;
+  --color-rose-100: #ffd6e8;
+  --color-rose-200: #ffc2dd;
+  --color-rose-400: #ff9ec7;
+  --color-rose-500: #ff7ab6;
+  --color-rose-700: #ff7ab6;
+
+  --color-indigo-50: #f1ecff;
+  --color-indigo-100: #e3d9ff;
+  --color-indigo-500: #b9a3ff;
+  --color-indigo-600: #a98fff;
+  --color-amber-100: #ffe7c2;
+  --color-amber-500: #ffa62b;
+  --color-blue-100: #d6e9ff;
+  --color-purple-100: #ece3ff;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 14px;
+
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--nb-ink);
+  background-color: var(--nb-bg);
+}
+
+.nb ::selection {
+  background: var(--nb-highlight);
+  color: var(--nb-ink);
+}
+
+.nb :focus-visible {
+  outline: 3px solid #0047ff;
+  outline-offset: 2px;
+}
+
+/* 柔光陰影全部換成零模糊硬陰影；有陰影的元素同時補上黑粗框 */
+.nb [class*="shadow-["],
+.nb .shadow-sm,
+.nb .shadow-md {
+  box-shadow: var(--nb-shadow) !important;
+  border: var(--nb-border);
+}
+
+/* 按下：陰影收起、元素沉下去，用 box-shadow 與 translate 表現，不改變佔位 */
+.nb button:active,
+.nb a:active {
+  box-shadow: none !important;
+}
+
+/* 所有可按的東西都顯示手指游標（原版的愛心按鈕沒有寫 cursor-pointer） */
+.nb button:not(:disabled),
+.nb [role="button"] {
+  cursor: pointer;
+}
+.nb button:disabled {
+  cursor: not-allowed;
+}
+
+/* 輸入框 focus：統一成黃底黑框硬陰影，取代原版的半透明光暈與外框 */
+.nb input:not([type="range"]):not([type="checkbox"]):focus,
+.nb textarea:focus {
+  outline: none;
+  background-color: var(--nb-highlight);
+  border-color: var(--nb-ink);
+  box-shadow: var(--nb-shadow) !important;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+/* 底部導覽列：手機是貼底的黑框條；桌面是浮動的貼紙面板。
+   每個分頁是一顆按鈕，選中時變成黃色色塊加黑框硬陰影，和網站其他主要按鈕同一套語彙 */
+.nb-tabbar {
+  background: var(--nb-surface);
+  border-top: var(--nb-border);
+}
+@media (min-width: 768px) {
+  .nb-tabbar {
+    border: var(--nb-border);
+    border-radius: 14px;
+    box-shadow: var(--nb-shadow);
+  }
+}
+.nb-tabbar-grip {
+  color: var(--nb-ink);
+  border-right: 2px solid var(--nb-ink);
+}
+.nb-tabbar-grip:hover {
+  background: var(--nb-highlight);
+}
+/* 桌面浮動面板有 14px 圓角，扣掉 3px 框線後，拖曳區左側要是 11px 圓角，hover 底色才不會凸出框外 */
+@media (min-width: 768px) {
+  .nb-tabbar-grip {
+    border-radius: 11px 0 0 11px;
+  }
+}
+.nb-tab {
+  color: var(--nb-ink-muted);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+.nb-tab:hover {
+  color: var(--nb-ink);
+  background: var(--nb-highlight);
+  border-color: var(--nb-ink);
+}
+.nb-tab-active,
+.nb-tab-active:hover {
+  color: var(--nb-ink);
+  background: var(--nb-primary);
+  border-color: var(--nb-ink);
+  box-shadow: var(--nb-shadow-sm);
+}
+.nb .nb-tab:active {
+  box-shadow: none !important;
+}
+
+/* 愛心按鈕：未收藏只是一顆淺灰愛心；收藏後才變成粉紅貼紙。兩種狀態同尺寸，切換時版面不跳動 */
+.nb-heart {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #858585;
+}
+.nb-heart:hover {
+  color: var(--nb-ink);
+}
+.nb-heart-on,
+.nb-heart-on:hover {
+  color: var(--nb-ink);
+  background: var(--nb-accent);
+  border-color: var(--nb-ink);
+  box-shadow: var(--nb-shadow-sm);
+}
+
+/* 位置標籤：用該位置的代表色，目前分區的那個加硬陰影 */
+.nb-pos-chip {
+  background: var(--chip-color);
+  color: var(--nb-ink);
+  border: 2px solid var(--nb-ink);
+  border-radius: 6px;
+}
+.nb-pos-chip-current {
+  box-shadow: var(--nb-shadow-sm);
+}
+
+/* 篩選的開關按鈕：與 CustomSelect 同一套框線、陰影與高度 */
+.nb-toggle {
+  background: var(--nb-surface);
+  color: var(--nb-ink);
+  border: 2px solid var(--nb-ink);
+  box-shadow: var(--nb-shadow);
+}
+.nb-toggle:hover {
+  background: var(--nb-highlight);
+}
+.nb-toggle-on {
+  background: var(--nb-accent);
+}
+.nb-toggle-on:hover {
+  background: var(--nb-accent);
+}
+
+/* 評分滑桿：滑塊左邊填黃色 */
+.nb-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  border: 2px solid var(--nb-ink);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--nb-primary) 0 var(--range-pct, 0%),
+    var(--nb-surface) var(--range-pct, 0%) 100%
+  );
+}
+.nb-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--nb-surface);
+  border: 3px solid var(--nb-ink);
+  box-shadow: var(--nb-shadow-sm);
+}
+.nb-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--nb-surface);
+  border: 3px solid var(--nb-ink);
+  box-shadow: var(--nb-shadow-sm);
+}
+
+.nb-masthead {
+  background: var(--nb-primary);
+  border-bottom: var(--nb-border);
+}
+
+.nb-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--nb-ink);
+}
+
+/* 位置分區：貼紙式標頭，代表色色塊 + 黑框硬陰影 */
+.nb-section-head {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: stretch;
+  background: var(--pos-color);
+  border: var(--nb-border);
+  border-radius: 10px;
+  box-shadow: var(--nb-shadow);
+}
+.nb-section-head .nb-numeral {
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 16px;
+  color: var(--nb-ink);
+  background: var(--nb-surface);
+  border-right: var(--nb-border);
+  border-radius: 7px 0 0 7px;
+}
+.nb-section-head span,
+.nb-section-head h3 {
+  color: var(--nb-ink) !important;
+}
+
+/* 球友卡：白底黑框硬陰影，左上角一塊位置色貼紙 */
+.nb-row {
+  background: var(--nb-surface);
+  border: var(--nb-border);
+  border-radius: 12px;
+  box-shadow: var(--nb-shadow);
+  position: relative;
+  transition: box-shadow 120ms ease-out, background-color 120ms ease-out;
+}
+.nb-row:hover {
+  background: color-mix(in srgb, var(--pos-color) 30%, white);
+  box-shadow: 6px 6px 0 var(--nb-ink);
+}
+.nb-row-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: var(--pos-color);
+  border-right: var(--nb-border);
+  border-radius: 9px 0 0 9px;
+}
+
+/* 最愛：粉紅貼紙，歪一點貼上去 */
+.nb-stamp {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--nb-accent);
+  color: var(--nb-ink);
+  border: 2px solid var(--nb-ink);
+  border-radius: 6px;
+  box-shadow: var(--nb-shadow-sm);
+  font-size: 12px;
+  font-weight: 900;
+  transform: rotate(-3deg);
+}
+
+/* 原版彩虹特效：卡片底部一條平塗色帶（不做漸層動畫） */
+.nb-rainbow-rule {
+  position: absolute;
+  left: 10px;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  border-top: 2px solid var(--nb-ink);
+  border-radius: 0 0 9px 0;
+  background: linear-gradient(
+    90deg,
+    #ff6b6b 0 16.6%,
+    #ffa94d 16.6% 33.3%,
+    #ffd60a 33.3% 50%,
+    #7ce577 50% 66.6%,
+    #5aa9ff 66.6% 83.3%,
+    #b9a3ff 83.3% 100%
+  );
+}
+
+.nb .shimmer-bg {
+  background: linear-gradient(90deg, #f3efe0 25%, #fff08a 50%, #f3efe0 75%);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb *,
+  .nb *::before,
+  .nb *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ===== 文字、框線、遮罩：與底色變數分開處理 ===== */
+
+/* 所有文字色一律黑或深灰（包含 hover:text-*），彩色不當文字色（design-tokens §2） */
+.nb [class*="text-white"],
+.nb [class*="text-emerald-"],
+.nb [class*="text-teal-"],
+.nb [class*="text-amber-"],
+.nb [class*="text-blue-"],
+.nb [class*="text-indigo-"],
+.nb [class*="text-purple-"],
+.nb [class*="text-orange-"],
+.nb [class*="text-rose-"],
+.nb [class*="text-slate-7"],
+.nb [class*="text-slate-8"],
+.nb [class*="text-slate-9"] {
+  color: var(--nb-ink);
+}
+.nb [class*="text-slate-3"],
+.nb [class*="text-slate-4"],
+.nb [class*="text-slate-5"],
+.nb [class*="text-slate-6"] {
+  color: var(--nb-ink-muted);
+}
+/* 錯誤與危險：唯一保留的彩色文字，白底對比 ≥ 4.5:1 */
+.nb [class*="text-red-"] {
+  color: #b3001b;
+}
+.nb [class*="fill-emerald-"] {
+  fill: var(--nb-ink);
+}
+
+/* 框線一律黑色、至少 2px；刻意透明的框線保持透明 */
+.nb [class*="border"]:not([class*="border-transparent"]):not(.nb-tab):not(.nb-heart) {
+  border-color: var(--nb-ink);
+}
+.nb .border {
+  border-width: 2px;
+}
+
+/* 彈窗遮罩：半透明黑 */
+.nb [class*="bg-slate-900/"],
+.nb [class*="bg-black/"] {
+  background-color: rgb(10 10 10 / 0.55);
+}
+
+/* 停用狀態：不靠降低對比，用斜線網底加深灰字表達（design-tokens §2） */
+.nb button:disabled,
+.nb button:disabled:hover {
+  background: repeating-linear-gradient(45deg, #f6f2e4 0 6px, #e2dbc0 6px 12px) !important;
+  color: var(--nb-ink-muted) !important;
+  box-shadow: none !important;
+}
+.nb button:disabled * {
+  color: var(--nb-ink-muted) !important;
+}
+
+/* ===== 轉場：互動元件統一 150ms ease-out，只動顏色、框線與陰影，不動佔位 ===== */
+.nb button,
+.nb a,
+.nb input,
+.nb textarea,
+.nb select,
+.nb label,
+.nb [role="option"],
+.nb .nb-row,
+.nb .nb-section-head {
+  transition-property: background-color, color, border-color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nb button:active:not(:disabled),
+.nb a:active {
+  transform: translate(2px, 2px);
+}
+
+/* ===== 分享頁的雲端代碼卡：原版是深色漸層加毛玻璃，這裡改成紫色色塊上放白色面板 ===== */
+.nb-share-card {
+  background: var(--nb-pos-libero);
+  color: var(--nb-ink);
+  border: var(--nb-border);
+  border-radius: 14px;
+  box-shadow: var(--nb-shadow);
+}
+.nb-share-panel {
+  background: var(--nb-surface);
+  border: 2px solid var(--nb-ink);
+  border-radius: 12px;
+}
+.nb-share-code {
+  background: var(--nb-highlight);
+  border: 2px solid var(--nb-ink);
+  border-radius: 10px;
+}
+.nb-share-input {
+  background: var(--nb-surface);
+  color: var(--nb-ink);
+  border: 2px solid var(--nb-ink);
+  border-radius: 10px;
+  outline: none;
+}
+.nb-share-input::placeholder {
+  color: var(--nb-ink-muted);
+}
+
+/* 通用按鈕：黃色主要、粉紅危險、白色次要 */
+.nb-btn {
+  background: var(--nb-primary);
+  color: var(--nb-ink);
+  border: 2px solid var(--nb-ink);
+  border-radius: 10px;
+  box-shadow: var(--nb-shadow-sm);
+}
+.nb-btn:hover {
+  background: var(--nb-highlight);
+}
+.nb-btn-danger,
+.nb-btn-danger:hover {
+  background: var(--nb-danger);
+}
+.nb-btn-danger:hover {
+  background: #ff8585;
+}
+.nb-btn-plain {
+  background: var(--nb-surface);
+}
+.nb-btn-plain:hover {
+  background: var(--nb-highlight);
+}
+.nb-warning {
+  background: var(--nb-surface);
+  color: #b3001b;
+  border: 2px solid var(--nb-ink);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* 新野獸派只用平塗：半透明白、毛玻璃、漸層底一律改成實色（毛玻璃在捲動時也會造成白線閃爍） */
+.nb [class*="bg-white/"] {
+  background-color: var(--nb-surface);
+}
+.nb [class*="backdrop-blur"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.nb [class*="bg-gradient"] {
+  background-image: none;
+}
+
+/* 匯入 JSON 的拖放區：虛線框，hover 與拖曳中都要有明顯變化 */
+.nb-dropzone {
+  background: var(--nb-bg);
+  border: 2px dashed var(--nb-ink);
+  transition: background-color 150ms ease-out, border-style 150ms ease-out, box-shadow 150ms ease-out;
+}
+.nb-dropzone:hover {
+  background: var(--nb-highlight);
+  box-shadow: var(--nb-shadow);
+}
+.nb-dropzone-active,
+.nb-dropzone-active:hover {
+  background: var(--nb-primary);
+  border-style: solid;
+  box-shadow: var(--nb-shadow);
+}
+
+/* ===== hover 回饋 =====
+ * 原版很多按鈕的 hover 只改文字色或框線色，但新野獸派裡兩者都統一成黑色，hover 前後就看不出差別。
+ * 沒有自帶 hover 底色的按鈕，一律在 hover 時換成淡黃底。 */
+.nb button:not(:disabled):not([class*="hover:bg-"]):not([class*="nb-"]):hover,
+.nb [aria-haspopup="listbox"]:hover {
+  background-color: var(--nb-highlight);
+}
+/* 已選取的黃色按鈕：hover 時變淺一階，仍看得出是選取狀態 */
+.nb button.bg-emerald-500:not(:disabled):hover,
+.nb button.bg-emerald-600:not(:disabled):hover {
+  background-color: var(--color-emerald-300);
+}
+.nb a[href]:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
