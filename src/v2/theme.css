@@ -1,0 +1,186 @@
+/*
+ * 球友誌 v2 主題：排球記分表。
+ * 沿用原版的 Tailwind class，只在 .qyz 範圍內重新定義 Tailwind v4 的色票與圓角變數，
+ * 所以原版 v1 完全不受影響，v2 也不必逐行改寫 3,700 行的 class。
+ */
+.qyz {
+  /* 紙與墨 */
+  --qyz-paper: #f3f4ef;
+  --qyz-sheet: #ffffff;
+  --qyz-ink: #18202d;
+  --qyz-rule: #c7ced8;
+  --qyz-rule-strong: #18202d;
+
+  /* 五個位置的路線色，貫穿分區標頭、球友列與篩選 */
+  --qyz-pos-setter: #c98a00;
+  --qyz-pos-outside: #d9531e;
+  --qyz-pos-opposite: #2f8a5b;
+  --qyz-pos-middle: #2c5cc5;
+  --qyz-pos-libero: #7a4fb5;
+
+  /* 主隊藍墨：取代原版 emerald／teal，作為主要動作色 */
+  --color-emerald-50: #eef3fc;
+  --color-emerald-100: #dce6f8;
+  --color-emerald-200: #b9ccf0;
+  --color-emerald-300: #8eabe4;
+  --color-emerald-400: #5f86d4;
+  --color-emerald-500: #2c5cc5;
+  --color-emerald-600: #234ba3;
+  --color-emerald-700: #1c3d84;
+  --color-emerald-800: #172f63;
+  --color-emerald-900: #11234a;
+  --color-teal-500: #2c5cc5;
+  --color-teal-600: #234ba3;
+
+  /* 墨色中性：取代原版 slate */
+  --color-slate-50: #f5f6f3;
+  --color-slate-100: #eaece8;
+  --color-slate-200: #d4d9de;
+  --color-slate-300: #b3bcc7;
+  --color-slate-400: #7f8a99;
+  --color-slate-500: #5a6576;
+  --color-slate-600: #434d5e;
+  --color-slate-700: #2f3847;
+  --color-slate-800: #18202d;
+  --color-slate-900: #10161f;
+
+  /* 客隊紅墨：危險與最愛 */
+  --color-red-50: #fcefee;
+  --color-red-100: #f8dcda;
+  --color-red-200: #efb6b2;
+  --color-red-400: #d45a52;
+  --color-red-500: #c0342b;
+  --color-red-600: #9f2820;
+  --color-rose-50: #fcefee;
+  --color-rose-100: #f8dcda;
+  --color-rose-200: #efb6b2;
+  --color-rose-400: #d45a52;
+  --color-rose-500: #c0342b;
+  --color-rose-700: #8a2019;
+
+  /* 記分表是方角紙：圓角收到 2–6px */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+  --radius-3xl: 6px;
+
+  font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--qyz-ink);
+  background-color: var(--qyz-paper);
+}
+
+.qyz ::selection {
+  background: var(--color-emerald-100);
+  color: var(--qyz-ink);
+}
+
+.qyz :focus-visible {
+  outline: 2px solid var(--color-emerald-500);
+  outline-offset: 2px;
+}
+
+/* 原版的大範圍柔光陰影改成紙張壓在桌面的薄陰影 */
+.qyz [class*="shadow-["],
+.qyz .shadow-sm,
+.qyz .shadow-md {
+  box-shadow: 0 1px 2px rgb(24 32 45 / 0.08) !important;
+}
+
+/* 記分表抬頭：粗墨線上下夾住 */
+.qyz-masthead {
+  background: var(--qyz-sheet);
+  border-bottom: 2px solid var(--qyz-rule-strong);
+}
+
+.qyz-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-slate-500);
+}
+
+/* 位置分區：左側羅馬數字格 + 路線色粗線 */
+.qyz-section-head {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: stretch;
+  background: var(--qyz-sheet);
+  border: 1px solid var(--qyz-rule-strong);
+  border-top-width: 4px;
+  border-top-color: var(--pos-color);
+}
+.qyz-section-head .qyz-numeral {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--pos-color);
+  border-right: 1px solid var(--qyz-rule);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* 球友列：記分表上的一列，位置色只在左緣 2px 的路線點上 */
+.qyz-row {
+  background: var(--qyz-sheet);
+  border: 1px solid var(--qyz-rule);
+  border-radius: 0;
+  position: relative;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.qyz-row:hover {
+  background: var(--color-emerald-50);
+  border-color: var(--color-emerald-300);
+}
+.qyz-row-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--pos-color);
+}
+
+/* 最愛：紅墨蓋章，不閃光、不消失 */
+.qyz-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border: 1.5px solid var(--color-red-500);
+  color: var(--color-red-500);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  transform: rotate(-4deg);
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.6);
+}
+
+/* 原版的彩虹邊框保留成一條細彩虹格線 */
+.qyz-rainbow-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #c0342b, #d9531e, #c98a00, #2f8a5b, #2c5cc5, #7a4fb5);
+}
+
+/* 骨架屏用紙色 */
+.qyz .shimmer-bg {
+  background: linear-gradient(90deg, #eaece8 25%, #dfe2dd 50%, #eaece8 75%);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qyz *,
+  .qyz *::before,
+  .qyz *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
